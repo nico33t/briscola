@@ -2,7 +2,7 @@ import { CartaImg } from "@/ui/Carta.tsx";
 import { Link } from "@/ui/router.tsx";
 
 const VOCI = [
-  { a: "/gioca", titolo: "Gioca", nota: "Contro l'AI o in locale", pronto: false },
+  { a: "/gioca", titolo: "Gioca", nota: "Contro il computer o in due", pronto: true },
   { a: "/carte", titolo: "Le carte", nota: "Tutte e 40, con i punti", pronto: true },
   { a: "/regole", titolo: "Regole", nota: "Come si gioca a Briscola", pronto: false },
 ] as const;

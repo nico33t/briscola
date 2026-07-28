@@ -1,5 +1,6 @@
 import { Link, useRotta } from "@/ui/router.tsx";
 import { SchermataCarte } from "@/ui/screens/Carte.tsx";
+import { SchermataGioca } from "@/ui/screens/Gioca.tsx";
 import { SchermataHome } from "@/ui/screens/Home.tsx";
 
 export function App() {
@@ -10,6 +11,8 @@ export function App() {
       return <SchermataHome />;
     case "/carte":
       return <SchermataCarte />;
+    case "/gioca":
+      return <SchermataGioca />;
     default:
       return <NonTrovata percorso={rotta} />;
   }

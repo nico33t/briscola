@@ -8,9 +8,50 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** ci sono le regole, le carte e la navigazione. Manca il tavolo.
-> Prossimo passo: **F3 — il tavolo e la partita locale 1v1**: mano, banco, presa, punteggi,
-> animazioni brevi, fine partita.
+> **Stato corrente:** ci si gioca. 1v1 contro il computer o in due sullo stesso device.
+> Prossimo passo: **F4 — il livello Esperto con ISMCTS** in Web Worker, e la variante 2v2.
+
+---
+
+## [0.5.0] — 2026-07-28 — F3: adesso ci si gioca
+
+Il tavolo esiste e la partita funziona dall'inizio alla fine.
+
+### Aggiunto
+- **`#/gioca`** — scelta fra *contro il computer* e *in due sullo stesso device*, difficoltà, e poi
+  il tavolo.
+- **Il tavolo** — la propria mano cliccabile, i dorsi dell'avversario, il banco, il mazzo con la
+  briscola di traverso e il conteggio delle carte, i punteggi che salgono a ogni presa.
+- **Avversario euristico**, due livelli. Apre con le lisce invece di regalare carichi, prende
+  quando conviene e scarta quando non conviene, non spreca una briscola per un giro da zero punti.
+  Vede **solo** l'information set: la firma della funzione rende impossibile passargli le carte
+  altrui per sbaglio.
+- **Dialog di fine partita** con i punteggi e la rivincita.
+- **Tastiera**: 1, 2, 3 giocano la carta corrispondente.
+
+### Animazioni
+Tutte in CSS, nessuna libreria, e tutte spente da `prefers-reduced-motion`.
+
+- **La presa in due tempi.** Il `core` risolve il giro nell'istante in cui cade l'ultima carta —
+  giusto per le regole, ma a schermo le carte sparirebbero prima che si capisca chi ha vinto. Ora
+  restano ferme 850 ms con un anello d'ottone attorno alla vincente, poi **volano verso chi le ha
+  vinte**. È il gesto che al tavolo dice "queste sono mie"; senza, il punteggio sembra cambiare da
+  solo.
+- **Le carte entrano dal lato di chi le cala**: le mie dal basso, le sue dall'alto.
+- **Distribuzione sfalsata**: ogni carta nuova entra da sé, con 70 ms di ritardo sulla precedente.
+  Vale per la mano iniziale e per ogni pescata, senza codice dedicato.
+- **Respiro sulla mano di turno**: un alone appena percettibile, per dire "tocca a te" senza
+  scriverlo una seconda volta.
+
+### Come gioca l'AI — numeri veri
+Torneo su **1000 partite** contro un giocatore casuale, alternando i posti così che il vantaggio di
+aprire non falsi il conto: **695 vittorie (69,5%)**, 289 sconfitte, 16 pari, **69,7 punti medi su
+120**. Il test in CI usa una soglia più prudente (66% su 300 partite) per non diventare fragile.
+
+### Verificato nel browser
+Partita intera giocata da capo a fondo: 20 giocate, finita 49–71, somma **120 esatti**, dialogo
+corretto. Rivincita riparte con un seme nuovo (briscola diversa). In hot-seat i turni si alternano
+fra Giocatore 1 e Giocatore 2 e le mani si scambiano. **Zero errori e zero warning in console.**
 
 ---
 

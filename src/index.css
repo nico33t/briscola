@@ -129,6 +129,46 @@
       var(--felt-deep);
   }
 
+  /* ── Il volo della presa ──────────────────────────────────────
+     Quando un giro si chiude, le carte non spariscono: vanno verso
+     chi le ha vinte. È il gesto che al tavolo dice "queste sono mie",
+     e senza di esso il punteggio sembra cambiare da solo.
+     La durata deve combaciare con VOLO_PRESA_MS in usePartita.ts. */
+  @keyframes vola-verso-il-basso {
+    to {
+      transform: translateY(58vh) scale(0.6) rotate(7deg);
+      opacity: 0;
+    }
+  }
+  @keyframes vola-verso-l-alto {
+    to {
+      transform: translateY(-58vh) scale(0.6) rotate(-7deg);
+      opacity: 0;
+    }
+  }
+
+  .vola-giu {
+    animation: vola-verso-il-basso 480ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
+  }
+  .vola-su {
+    animation: vola-verso-l-alto 480ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
+  }
+
+  /* Il respiro della carta di turno: appena percettibile, serve solo a dire
+     "tocca a te" senza scriverlo una seconda volta. */
+  @keyframes respiro {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(214 171 72 / 0);
+    }
+    50% {
+      box-shadow: 0 0 0 3px rgb(214 171 72 / 0.28);
+    }
+  }
+  .in-attesa-di-te {
+    animation: respiro 2.4s ease-in-out infinite;
+  }
+
   /* Rispetta chi ha chiesto meno movimento — regola, non gentilezza.
      Qui !important è necessario e voluto: deve battere le animazioni
      dichiarate dai singoli componenti e gli stili inline, altrimenti la
