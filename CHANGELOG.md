@@ -8,8 +8,48 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** progetto appena aperto. C'è la specifica completa, non c'è ancora codice.
-> Prossimo passo: **F0 — scaffolding** (Vite + React + TS + Tailwind + shadcn/ui, lint/typecheck/test, CI).
+> **Stato corrente:** F0 chiusa, impalcatura in piedi e gate verde.
+> Prossimo passo: **F1 — il motore di gioco (`core/`) in TDD**: mazzo, ordine di forza, vincitore
+> della presa, punteggio, pescata, fine partita, information set.
+
+---
+
+## [0.1.0] — 2026-07-28 — F0: l'impalcatura, e una sorpresa di TypeScript 7
+
+Prima versione con del codice dentro. Nessun gioco ancora: c'è il progetto che sta in piedi, si
+costruisce, si testa e si controlla da solo.
+
+### Aggiunto
+- Scaffolding **Vite 8.1.5 + React 19.2.8 + TypeScript 7.0.2 + Tailwind 4.3.3 + Vitest 4.1.10**.
+- **shadcn/ui** cablato e verificato sul serio: `button`, `dialog`, `card` e `badge` generati dalla
+  CLI e passati dal gate.
+- **Tema "osteria moderna"**: variabili shadcn in oklch più una palette dedicata al tavolo
+  (`--felt`, `--felt-deep`, `--wood`, `--brass`, `--on-felt`), tema chiaro e scuro, feltro come
+  gradiente radiale che scurisce verso i bordi.
+- **Accessibilità dalla prima riga**: `prefers-reduced-motion` spegne le animazioni.
+- Configurazione TypeScript severa: `strict`, `noUncheckedIndexedAccess`,
+  `exactOptionalPropertyTypes`, `noImplicitReturns`, `noImplicitOverride`, `noUnusedLocals`,
+  `noUnusedParameters`.
+- Gate unico **`npm run check`** = lint + typecheck + test + build.
+- **CI GitHub Actions** su push e pull request.
+
+### Modificato
+- **Linter: Biome al posto di ESLint.** Non è una preferenza, è un vincolo — vedi qui sotto.
+
+### Note tecniche
+
+**TypeScript 7 ha rimosso la Compiler API JavaScript.** Verificato sul pacchetto installato:
+`require("typescript")` risolve a `lib/version.cjs` ed espone *solo* la stringa di versione;
+`createProgram` e `createSourceFile` sono `undefined`. L'API vera è ora `typescript/unstable/*` e
+parla in JSON-RPC col binario Go.
+
+Conseguenza: `typescript-eslint` (peer `typescript ">=4.8.4 <6.1.0"`) non può funzionare, e senza di
+lui ESLint non sa nemmeno leggere un `.tsx`. Si è scelto **Biome 2.5.6**, binario Rust con parser
+TypeScript proprio e nessuna dipendenza dal pacchetto `typescript`, che fa anche da formattatore.
+Il prezzo, dichiarato: niente regole *type-aware*; le compensa la configurazione severa di `tsc`.
+
+⚠️ **Mai installare con `--omit=optional`**: `tsc` è distribuito come binario nativo per piattaforma
+attraverso le dipendenze opzionali.
 
 ### Aggiunto
 - `ASSETS.md` — registro di origine e licenza di ogni asset.

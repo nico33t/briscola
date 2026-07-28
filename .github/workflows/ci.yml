@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      # ⚠️ npm ci senza --omit=optional: TypeScript 7 distribuisce `tsc` come
+      # binario nativo per piattaforma tramite optionalDependencies. Escluderle
+      # significa ritrovarsi senza compilatore.
+      - run: npm ci
+
+      - name: Lint e formato (Biome)
+        run: npm run lint
+
+      - name: Tipi (TypeScript 7)
+        run: npm run typecheck
+
+      - name: Test (Vitest)
+        run: npm test
+
+      - name: Build (Vite)
+        run: npm run build

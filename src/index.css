@@ -1,0 +1,148 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────
+   Tema "osteria moderna"
+   Chrome shadcn pulito, tavolo in feltro verde profondo con
+   accenti legno e ottone. Le carte piacentine sono già
+   coloratissime: tutto il resto deve stare indietro.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --radius: 0.625rem;
+
+  /* chrome */
+  --background: oklch(0.98 0.008 85);
+  --foreground: oklch(0.22 0.02 60);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 60);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 60);
+  --primary: oklch(0.42 0.09 155);
+  --primary-foreground: oklch(0.98 0.01 155);
+  --secondary: oklch(0.95 0.015 85);
+  --secondary-foreground: oklch(0.3 0.03 60);
+  --muted: oklch(0.95 0.012 85);
+  --muted-foreground: oklch(0.52 0.02 70);
+  --accent: oklch(0.93 0.035 85);
+  --accent-foreground: oklch(0.3 0.05 70);
+  --destructive: oklch(0.52 0.19 27);
+  --destructive-foreground: oklch(0.98 0.01 27);
+  --border: oklch(0.9 0.012 80);
+  --input: oklch(0.9 0.012 80);
+  --ring: oklch(0.42 0.09 155);
+
+  /* tavolo — identico in chiaro e scuro: un tavolo è un tavolo */
+  --felt: oklch(0.32 0.062 158);
+  --felt-deep: oklch(0.25 0.055 160);
+  --felt-line: oklch(0.4 0.055 158);
+  --wood: oklch(0.38 0.06 55);
+  --wood-light: oklch(0.48 0.07 58);
+  --brass: oklch(0.76 0.125 85);
+  --on-felt: oklch(0.96 0.012 90);
+  --on-felt-muted: oklch(0.78 0.02 95);
+}
+
+.dark {
+  --background: oklch(0.19 0.015 65);
+  --foreground: oklch(0.95 0.01 85);
+  --card: oklch(0.24 0.018 65);
+  --card-foreground: oklch(0.95 0.01 85);
+  --popover: oklch(0.24 0.018 65);
+  --popover-foreground: oklch(0.95 0.01 85);
+  --primary: oklch(0.68 0.11 155);
+  --primary-foreground: oklch(0.18 0.03 155);
+  --secondary: oklch(0.29 0.02 65);
+  --secondary-foreground: oklch(0.95 0.01 85);
+  --muted: oklch(0.29 0.02 65);
+  --muted-foreground: oklch(0.68 0.015 80);
+  --accent: oklch(0.33 0.03 70);
+  --accent-foreground: oklch(0.95 0.01 85);
+  --destructive: oklch(0.62 0.19 25);
+  --destructive-foreground: oklch(0.97 0.01 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.68 0.11 155);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-felt: var(--felt);
+  --color-felt-deep: var(--felt-deep);
+  --color-felt-line: var(--felt-line);
+  --color-wood: var(--wood);
+  --color-wood-light: var(--wood-light);
+  --color-brass: var(--brass);
+  --color-on-felt: var(--on-felt);
+  --color-on-felt-muted: var(--on-felt-muted);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      sans-serif;
+    /* il gioco non scrolla: il tavolo sta nella viewport */
+    overscroll-behavior: none;
+  }
+
+  /* Il feltro del tavolo: radiale che scurisce verso i bordi,
+     come un panno illuminato da una lampada sopra. */
+  .table-felt {
+    background:
+      radial-gradient(ellipse 120% 90% at 50% 42%, var(--felt) 0%, var(--felt-deep) 78%),
+      var(--felt-deep);
+  }
+
+  /* Rispetta chi ha chiesto meno movimento — regola, non gentilezza.
+     Qui !important è necessario e voluto: deve battere le animazioni
+     dichiarate dai singoli componenti e gli stili inline, altrimenti la
+     preferenza dell'utente perde. È l'unico posto del progetto dove si usa. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      /* biome-ignore-start lint/complexity/noImportantStyles: deve sovrascrivere le animazioni dei componenti, altrimenti la preferenza di accessibilità non ha effetto */
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+      /* biome-ignore-end lint/complexity/noImportantStyles: fine dell'eccezione */
+    }
+  }
+}
