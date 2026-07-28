@@ -3,7 +3,10 @@
 Gioco di **Briscola** con **carte piacentine**, nel browser. Offline-first, senza account,
 senza pubblicità, senza raccolta dati.
 
-> ⚠️ **Stato: specifica scritta, codice non ancora iniziato.**
+### ▶️ Gioca ora: **[briscola.pages.dev](https://briscola.pages.dev)**
+
+> **Stato:** ci si gioca. 1v1 contro il computer o in due sullo stesso device.
+> In arrivo: livello Esperto con ricerca Monte Carlo, variante 2v2, partita con un amico via QR.
 > Il diario delle decisioni è in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Come si gioca

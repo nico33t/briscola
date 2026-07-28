@@ -8,8 +8,24 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** ci si gioca. 1v1 contro il computer o in due sullo stesso device.
+> **Stato corrente:** ci si gioca, ed è **online**.
 > Prossimo passo: **F4 — il livello Esperto con ISMCTS** in Web Worker, e la variante 2v2.
+
+### 🚀 Online
+Pubblicato su Cloudflare Pages: **https://briscola.pages.dev**
+
+Progetto Pages `briscola`, **separato** dal sito personale `nicolatomassini` — quello ha in
+produzione `nicolatomassini.com`, `www` e `card` ed è collegato a Git, dove un deploy da CLI
+convive male. Il router è a hash, quindi non serve nessun `_redirects`.
+
+Verificato in produzione: `index.js` servito come `application/javascript`, `index.css` come
+`text/css`, le carte come `image/webp` — nessun asset servito come `text/html`, che è il modo
+classico in cui una SPA su Pages si rompe. Partita giocata sul sito pubblicato, zero errori in
+console.
+
+⏳ Il dominio `briscola.nicolatomassini.com` resta da collegare a mano dal dashboard: `wrangler`
+4.85 non espone i domini personalizzati da CLI, e il token locale ha `zone (read)` ma non
+`zone (write)`.
 
 ---
 
