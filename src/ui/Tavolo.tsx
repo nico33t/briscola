@@ -33,6 +33,15 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
   const manoAvversario = stato.mani[seatAvversario] ?? [];
   const finita = stato.fase === "fine";
 
+  /**
+   * Mentre si gioca la pagina non scorre: il campo sta tutto nella viewport.
+   * La classe si toglie all'uscita, perché le altre schermate devono scorrere.
+   */
+  useEffect(() => {
+    document.body.classList.add("senza-scroll");
+    return () => document.body.classList.remove("senza-scroll");
+  }, []);
+
   // Tastiera: 1, 2, 3 giocano la carta corrispondente.
   useEffect(() => {
     if (!puoGiocare) return;
@@ -49,7 +58,7 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
   }, [puoGiocare, manoMia, partita]);
 
   return (
-    <main className="table-felt flex min-h-dvh flex-col justify-between overflow-hidden px-3 py-3 sm:px-6 sm:py-5">
+    <main className="table-felt flex h-dvh flex-col justify-between overflow-hidden px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
       {/* Avversario */}
       <section className="flex flex-col items-center gap-2">
         <div className="flex w-full max-w-2xl items-center justify-between text-xs">

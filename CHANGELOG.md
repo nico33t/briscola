@@ -8,7 +8,7 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** ci si gioca, ed è **online**.
+> **Stato corrente:** ci si gioca, è **online** e si installa come app.
 > Prossimo passo: **F4 — il livello Esperto con ISMCTS** in Web Worker, e la variante 2v2.
 
 ### 🚀 Online
@@ -36,6 +36,42 @@ console.
   build) **prima di ogni push**. Non è un consiglio, è l'unico controllo che esiste. Chi vuole
   automatizzarlo può installarsi un hook `pre-push` in locale, a costo zero — vedi `AGENTS.md` §1.0.
 - `.wrangler/` aggiunto a `.gitignore`: è cache locale creata dal deploy, non deve stare in repo.
+
+---
+
+## [0.6.0] — 2026-07-28 — Diventa un'app, e non perde più la partita
+
+### Aggiunto
+- **La partita non si perde più.** Ogni mossa finisce in `localStorage`: ricaricare la pagina per
+  sbaglio ti riporta esattamente dov'eri — stesse carte, stessi punti, stesso turno. A partita
+  finita il salvataggio si cancella da sé, così al ritorno si riparte dal menu invece di riaprire
+  un tavolo già chiuso.
+- **Installabile come app.** `manifest.webmanifest` + service worker scritto a mano: si aggiunge
+  alla schermata home, si apre a tutto schermo e **funziona senza rete**. Due scorciatoie nel
+  manifest: *Nuova partita* e *Le 40 carte*.
+- **Icona dell'app: le tre carte del menu**, a ventaglio sul feltro. Non è un disegno a parte — è
+  generata dalle carte vere (`npm run icons:build`), così chi la vede sulla home riconosce subito
+  cos'è. Quattro tagli: 192, 512, una `maskable` con il ventaglio dentro la zona sicura (Android
+  ritaglia i bordi come vuole) e l'`apple-touch-icon`.
+
+### Modificato
+- **Il verde arriva fino ai bordi.** `html` e `body` hanno lo sfondo del feltro, e `theme-color`
+  tinge la barra del browser. Non è un vezzo: su iOS il rimbalzo dello scroll scopre lo sfondo del
+  documento e in standalone quello sfondo riempie la barra di stato — se resta bianco, l'app sembra
+  rotta proprio dove dovrebbe sembrare un'app.
+- **Il campo da gioco non scorre più.** Il tavolo occupa esattamente una viewport (`h-dvh`) e
+  mentre si gioca la pagina è bloccata, con rispetto per le safe area di iPhone. Le altre schermate
+  continuano a scorrere: il blocco si toglie all'uscita dal tavolo.
+- Il tema è ora sempre scuro: il dialogo di fine partita non è più una scheda bianca sopra un
+  tavolo verde.
+
+### Sicurezza
+Quello che si rilegge da `localStorage` è trattato come **input non fidato**, esattamente come sarà
+un messaggio dal DataChannel: può essere di una versione vecchia, troncato, o modificato a mano da
+chi vuole darsi tre assi. Si valida tutto — semi, ranghi, posti, forma del banco — e il controllo
+che chiude la porta è l'ultimo: **40 carte, tutte diverse**. Un salvataggio con un asso in più viene
+buttato e si riparte dal menu. **11 test** su questo, incluso il caso del doppione che tiene il
+totale a 40.
 
 ---
 

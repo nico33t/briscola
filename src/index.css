@@ -108,17 +108,38 @@
     @apply border-border outline-ring/50;
   }
 
+  /* Il verde arriva fino ai bordi.
+     Non è un vezzo: su iOS il rimbalzo dello scroll scopre lo sfondo del
+     documento, e in standalone (aggiunto alla home) quello sfondo riempie
+     anche la barra di stato. Se resta bianco, l'app sembra rotta proprio
+     dove dovrebbe sembrare un'app. */
+  html,
+  body {
+    background-color: var(--felt-deep);
+    color-scheme: dark;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     font-family:
       ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
       sans-serif;
-    /* il gioco non scrolla: il tavolo sta nella viewport */
     overscroll-behavior: none;
+  }
+
+  /* Messa dal tavolo mentre è a schermo: la pagina non scrolla, il campo da
+     gioco sta tutto nella viewport. Le altre schermate (le carte, le regole)
+     devono poter scorrere, quindi la classe si toglie all'uscita. */
+  body.senza-scroll {
+    overflow: hidden;
+    /* niente rimbalzo su iOS mentre si gioca */
+    position: fixed;
+    inset: 0;
+    width: 100%;
   }
 
   /* Il feltro del tavolo: radiale che scurisce verso i bordi,

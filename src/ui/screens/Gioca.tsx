@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Livello } from "@/ai/euristica.ts";
 import { Button } from "@/components/ui/button.tsx";
+import type { GameState } from "@/core/types.ts";
+import { caricaPartita, dimenticaPartita } from "@/game/persistenza.ts";
 import type { Modalita } from "@/game/usePartita.ts";
 import { usePartita } from "@/game/usePartita.ts";
 import { cn } from "@/lib/utils.ts";
@@ -15,23 +17,44 @@ interface Configurata {
 }
 
 export function SchermataGioca() {
-  const [config, setConfig] = useState<Configurata | null>(null);
+  /**
+   * Se c'è una partita a metà salvata sul device, si riprende da lì.
+   * Ricaricare la pagina per sbaglio non deve costare la partita.
+   * Si legge una volta sola, al montaggio: dopo comanda lo stato in memoria.
+   */
+  const [ripresa] = useState(() => caricaPartita());
+  const [config, setConfig] = useState<Configurata | null>(ripresa?.config ?? null);
+
+  const esci = () => {
+    dimenticaPartita();
+    setConfig(null);
+  };
 
   if (!config) {
     return <Setup onGioca={setConfig} />;
   }
-  return <PartitaInCorso config={config} onEsci={() => setConfig(null)} />;
+  return (
+    <PartitaInCorso
+      config={config}
+      // Lo stato ripreso vale solo se è quello della configurazione ripresa:
+      // premendo "Cambia partita" e ricominciando, si riparte pulito.
+      statoIniziale={config === ripresa?.config ? ripresa.stato : undefined}
+      onEsci={esci}
+    />
+  );
 }
 
 /** Montato solo a configurazione scelta, così l'hook parte con il seme giusto. */
 function PartitaInCorso({
   config,
+  statoIniziale,
   onEsci,
 }: {
   readonly config: Configurata;
+  readonly statoIniziale: GameState | undefined;
   readonly onEsci: () => void;
 }) {
-  const partita = usePartita(config);
+  const partita = usePartita(config, statoIniziale);
   return <Tavolo partita={partita} modalita={config.modalita} onEsci={onEsci} />;
 }
 

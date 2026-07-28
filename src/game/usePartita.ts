@@ -5,6 +5,7 @@ import { infoSetPer } from "@/core/infoset.ts";
 import { applica, esito, nuovaPartita, puntiSeat } from "@/core/machine.ts";
 import { creaRng } from "@/core/rng.ts";
 import type { Carta, GameState, Giocata, Seat } from "@/core/types.ts";
+import { dimenticaPartita, salvaPartita } from "@/game/persistenza.ts";
 
 /**
  * Il collante fra il motore e l'interfaccia.
@@ -55,10 +56,10 @@ export interface Partita {
   ricomincia(): void;
 }
 
-export function usePartita(config: ConfigPartita): Partita {
+export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Partita {
   const [seed, setSeed] = useState(config.seed);
-  const [stato, setStato] = useState<GameState>(() =>
-    nuovaPartita({ variante: "1v1", seed: config.seed }),
+  const [stato, setStato] = useState<GameState>(
+    () => statoIniziale ?? nuovaPartita({ variante: "1v1", seed: config.seed }),
   );
   const [presa, setPresa] = useState<PresaMostrata | null>(null);
   const [spazzata, setSpazzata] = useState(false);
@@ -97,6 +98,19 @@ export function usePartita(config: ConfigPartita): Partita {
       clearTimeout(fine);
     };
   }, [presa]);
+
+  /**
+   * Ogni mossa finisce su disco: ricaricare la pagina per sbaglio non deve
+   * cancellare una partita a metà. A partita finita si dimentica tutto, così
+   * al ritorno si riparte dal menu invece di riaprire un tavolo già chiuso.
+   */
+  useEffect(() => {
+    if (stato.fase === "fine") {
+      dimenticaPartita();
+    } else {
+      salvaPartita({ ...config, seed }, stato);
+    }
+  }, [stato, config, seed]);
 
   const turnoDellAI = config.modalita === "ai" && stato.turno === SEAT_AI;
   const inAttesa = presa !== null;
