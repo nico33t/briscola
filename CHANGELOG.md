@@ -27,6 +27,16 @@ console.
 4.85 non espone i domini personalizzati da CLI, e il token locale ha `zone (read)` ma non
 `zone (write)`.
 
+### Rimosso
+- **La CI GitHub Actions.** Non è mai girata: l'account è bloccato per una questione di
+  fatturazione, e non ha senso pagare per far girare una CI su un gioco di carte. La repo resta
+  gratis e semplice — solo codice. Cancellate anche le run rosse rimaste in cronologia.
+
+  **Il cancello adesso è locale e va passato a mano:** `npm run check` (lint + typecheck + test +
+  build) **prima di ogni push**. Non è un consiglio, è l'unico controllo che esiste. Chi vuole
+  automatizzarlo può installarsi un hook `pre-push` in locale, a costo zero — vedi `AGENTS.md` §1.0.
+- `.wrangler/` aggiunto a `.gitignore`: è cache locale creata dal deploy, non deve stare in repo.
+
 ---
 
 ## [0.5.0] — 2026-07-28 — F3: adesso ci si gioca

@@ -5,6 +5,9 @@ dist-ssr/
 coverage/
 *.local
 
+# cache locale di wrangler, creata dal deploy su Cloudflare Pages
+.wrangler/
+
 .env
 .env.*
 !.env.example
