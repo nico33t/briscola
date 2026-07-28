@@ -1,48 +1,34 @@
-import { mazzoCompleto, PUNTI } from "@/core/deck.ts";
-import { CartaImg, nomeCarta } from "@/ui/Carta.tsx";
+import { Link, useRotta } from "@/ui/router.tsx";
+import { SchermataCarte } from "@/ui/screens/Carte.tsx";
+import { SchermataHome } from "@/ui/screens/Home.tsx";
 
-/**
- * Schermata provvisoria: mostra il mazzo appena generato, per controllare a
- * occhio che le 40 carte siano ritagliate bene e mappate al posto giusto.
- * Verrà sostituita dal tavolo vero in F3.
- */
 export function App() {
-  const mazzo = mazzoCompleto();
+  const rotta = useRotta();
 
+  switch (rotta) {
+    case "/":
+      return <SchermataHome />;
+    case "/carte":
+      return <SchermataCarte />;
+    default:
+      return <NonTrovata percorso={rotta} />;
+  }
+}
+
+function NonTrovata({ percorso }: { readonly percorso: string }) {
   return (
-    <main className="table-felt min-h-dvh px-4 py-10 sm:px-8">
-      <header className="mx-auto mb-10 max-w-5xl text-center">
-        <h1 className="font-semibold text-4xl text-on-felt tracking-tight">Briscola</h1>
-        <p className="mt-2 text-balance text-on-felt-muted text-sm">
-          Carte piacentine · 40 carte ritagliate dall'originale in pubblico dominio
-        </p>
-      </header>
-
-      <section className="mx-auto grid max-w-5xl grid-cols-5 gap-2.5 sm:grid-cols-10 sm:gap-3">
-        {mazzo.map((carta) => (
-          <figure key={`${carta.seme}-${carta.rango}`} className="group">
-            <CartaImg
-              carta={carta}
-              className="transition-transform duration-150 group-hover:-translate-y-1"
-            />
-            <figcaption className="mt-1 text-center text-[10px] text-on-felt-muted leading-tight">
-              {nomeCarta(carta)}
-              {PUNTI[carta.rango] > 0 && (
-                <span className="ml-1 text-brass">{PUNTI[carta.rango]}</span>
-              )}
-            </figcaption>
-          </figure>
-        ))}
-      </section>
-
-      <section className="mx-auto mt-12 max-w-5xl">
-        <h2 className="mb-3 text-center text-on-felt-muted text-xs uppercase tracking-widest">
-          Retro
-        </h2>
-        <div className="mx-auto w-24">
-          <CartaImg coperta />
-        </div>
-      </section>
+    <main className="table-felt flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
+      <h1 className="font-semibold text-3xl text-on-felt">Questa pagina non c'è</h1>
+      <p className="text-on-felt-muted text-sm">
+        <code className="rounded bg-black/25 px-1.5 py-0.5">#{percorso}</code> non porta da nessuna
+        parte.
+      </p>
+      <Link
+        a="/"
+        className="mt-2 rounded-lg border border-brass/40 px-4 py-2 text-brass text-sm hover:bg-brass/10"
+      >
+        Torna al menu
+      </Link>
     </main>
   );
 }

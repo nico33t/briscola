@@ -8,9 +8,38 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** F2 chiusa. Ci sono le regole e ci sono le carte; manca il tavolo.
+> **Stato corrente:** ci sono le regole, le carte e la navigazione. Manca il tavolo.
 > Prossimo passo: **F3 — il tavolo e la partita locale 1v1**: mano, banco, presa, punteggi,
 > animazioni brevi, fine partita.
+
+---
+
+## [0.4.0] — 2026-07-28 — Le carte hanno un indirizzo
+
+### Aggiunto
+- **Router basato sull'hash**, scritto a mano in una cinquantina di righe (`ui/router.tsx`):
+  `useRotta`, `Link`, `vaiA`, più `normalizzaHash` che è testata a parte.
+- **`#/carte`** — le 40 carte piacentine sempre consultabili. Raggruppate per seme, con i punti di
+  ciascuna e un interruttore per passare dall'ordine tradizionale (asso → re) all'**ordine di forza
+  in presa**, che non è lo stesso: il due di briscola non vale niente ma prende l'asso di qualunque
+  altro seme. In fondo il retro e la nota sulla provenienza degli asset.
+- **Home** con il menu delle modalità. Le voci non ancora pronte restano visibili ma disabilitate,
+  marcate "in arrivo": nascondere ciò che non c'è rende difficile capire dove sta andando il gioco.
+- **Pagina "non trovata"** con ritorno al menu.
+
+### Note
+- **Perché non react-router.** Le rotte sono una manciata e piatte, senza annidamenti né
+  caricamento dati. E l'hash **non richiede regole di rewrite** sull'hosting statico: `/carte`
+  ricaricato a mano darebbe 404 senza configurare il server, `#/carte` no. L'app conosce solo tre
+  funzioni, quindi cambiare idea costa un file.
+- **`#/carte` è permanente**, non una schermata di prova. Serve a chi impara e serve a noi per
+  vedere a colpo d'occhio se il ritaglio degli asset è rimasto sano dopo un rigenero.
+- Aggiunto un override di Biome che permette `console` dentro `scripts/`: uno script di build deve
+  poter stampare l'avanzamento. Meglio una regola esplicita che sei righe silenziate a mano.
+
+### Verificato nel browser
+41 immagini (40 carte + retro) **tutte caricate**, nessuna rotta, tutte con testo alternativo.
+Zero errori e zero warning in console. Home, `#/carte` e rotta inesistente rispondono tutte.
 
 ---
 
