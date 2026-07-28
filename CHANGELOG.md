@@ -8,9 +8,51 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** F0 chiusa, impalcatura in piedi e gate verde.
-> Prossimo passo: **F1 — il motore di gioco (`core/`) in TDD**: mazzo, ordine di forza, vincitore
-> della presa, punteggio, pescata, fine partita, information set.
+> **Stato corrente:** F1 chiusa. Il gioco sa già giocare — non ha ancora una faccia.
+> Prossimo passo: **F2 — la pipeline degli asset**: ritagliare le 40 carte piacentine
+> dall'immagine public domain di Wikimedia e disegnare il retro.
+
+---
+
+## [0.2.0] — 2026-07-28 — F1: il motore, scritto partendo dai test
+
+Le regole della Briscola, in TypeScript puro. Nessuna interfaccia ancora: il gioco sa contare le
+prese, non sa mostrarle. **76 test verdi.**
+
+### Aggiunto
+- **`core/types.ts`** — il vocabolario: semi, ranghi, carte, posti, squadre, stato, azioni, eventi.
+  Lo stato è interamente `readonly`.
+- **`core/rng.ts`** — generatore mulberry32 seedato. Serve perché `core/` deve restare
+  deterministico: senza, niente replay ripetibili e niente simulazioni dell'AI.
+- **`core/deck.ts`** — le 40 carte, i punti (asso 11, tre 10, re 4, cavallo 3, fante 2) e l'ordine
+  di forza, che **non coincide con i punti**: il due di briscola prende l'asso di un altro seme.
+  Mescolata Fisher-Yates che non tocca il mazzo passato.
+- **`core/rules.ts`** — chi vince il giro, quanto vale un mucchio, chi sta con chi. Le regole
+  esistono **solo qui**.
+- **`core/machine.ts`** — il reducer puro. Distribuisce, valida, risolve la presa, fa pescare
+  (vincitore per primo), chiude la partita. Punteggio 1v1 e 2v2 a coppie.
+- **`core/infoset.ts`** — la proiezione dello stato per un singolo giocatore, più `carteNonViste`,
+  la base della determinizzazione ISMCTS che arriverà in F4.
+
+### Note di progettazione
+
+**I punti non stanno nello stato.** Si ricavano dalle prese con `puntiSeat`. Tenerli anche come
+contatore avrebbe creato una seconda fonte di verità, che prima o poi diverge da quella vera.
+
+**Le mosse illegali non lanciano eccezioni.** `applica` restituisce `{ ok: false, motivo }`. Le
+azioni arriveranno anche dal DataChannel WebRTC, e un peer ostile non deve poter far esplodere
+l'host mandando una carta che non ha.
+
+**L'infoset è un vincolo, non una comodità.** L'AI riceverà solo quello. È testato in negativo: si
+serializza l'infoset e si verifica che **non contenga** nessuna carta avversaria — nel 2v2 nemmeno
+quelle del compagno.
+
+### Test
+- Property test su **300 partite simulate** (150 in 1v1, 150 in 2v2): i punti fanno sempre **120
+  esatti** e nessuna carta si perde o si duplica.
+- Casi espliciti sulle prese: briscola bassa che batte l'asso di un altro seme, briscola più alta fra
+  più briscole, briscola giocata per ultima, carta fuori seme che non prende mai per quanto valga.
+- Determinismo: stesso seme, stessa partita.
 
 ---
 
