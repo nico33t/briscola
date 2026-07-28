@@ -1,0 +1,21 @@
+# Header per Cloudflare Pages.
+
+# Cloudflare Pages non conosce l'estensione .webmanifest e lo servirebbe come
+# text/html — e un manifest con quel tipo MIME viene rifiutato dal browser,
+# quindi niente "Installa app". Va dichiarato a mano.
+/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: public, max-age=3600
+
+# Il service worker NON va messo in cache a lungo: se il browser tiene una copia
+# vecchia, nessun aggiornamento arriva mai più agli utenti. Si rilegge sempre.
+/sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-cache, must-revalidate
+
+# Le risorse con l'hash nel nome non cambiano mai a parità di nome: si possono
+# tenere a lungo. Niente `immutable`: durante la propagazione di un deploy una
+# risorsa non ancora presente verrebbe servita come index.html e cachata così
+# per giorni, con l'errore "MIME type text/html" impossibile da sbloccare.
+/assets/*
+  Cache-Control: public, max-age=31536000
