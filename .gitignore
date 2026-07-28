@@ -1,0 +1,30 @@
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+*.local
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
+
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# sorgente carte scaricata da Wikimedia (2,8 MB) — la rigenera scripts/build-cards.ts
+scripts/.cache/
+
+# 🔒 Doc interni — restano LOCALI, non vanno su GitHub (decisione founder 28/07/2026).
+# Su GitHub va solo CHANGELOG.md. Vedi AGENTS.md §0-bis.
+AGENTS.md
+implements.md
