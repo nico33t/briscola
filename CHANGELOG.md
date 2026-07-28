@@ -8,9 +8,52 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** F1 chiusa. Il gioco sa già giocare — non ha ancora una faccia.
-> Prossimo passo: **F2 — la pipeline degli asset**: ritagliare le 40 carte piacentine
-> dall'immagine public domain di Wikimedia e disegnare il retro.
+> **Stato corrente:** F2 chiusa. Ci sono le regole e ci sono le carte; manca il tavolo.
+> Prossimo passo: **F3 — il tavolo e la partita locale 1v1**: mano, banco, presa, punteggi,
+> animazioni brevi, fine partita.
+
+---
+
+## [0.3.0] — 2026-07-28 — F2: le carte, ritagliate dai corridoi bianchi
+
+Le 40 carte piacentine esistono come file. Il mazzo si vede a schermo.
+
+### Aggiunto
+- **`scripts/build-cards.ts`** (`npm run cards:build`) — scarica la sorgente public domain da
+  Wikimedia, la tiene in cache, rileva le carte, ritaglia, normalizza a 320×528 ed esporta WebP
+  q82. Scrive `manifest.json` con fonte, autore e licenza.
+- **40 carte WebP** in `src/assets/cards/`, ~1,3 MB in tutto. Versionate: lo script gira di rado e
+  costruire il progetto non deve dipendere da lui.
+- **Retro della carta** — SVG originale: reticolo a rombi verde, cornice e rosone in ottone.
+  Nessun problema di licenza, e pesa 1,9 KB (Vite lo inlinea come data URI).
+- **`ui/Carta.tsx`** — mostra una carta. Senza carta assegnata, o coperta, mostra il retro: un
+  componente che non ha il diritto di conoscere la carta non può rivelarla per sbaglio. Ogni carta
+  ha il nome parlato per gli screen reader ("Asso di coppe").
+- `sharp` come **devDependency** (serve solo allo script).
+
+### La parte interessante: come si ritagliano carte storte
+
+La sorgente è la fotografia di un mazzo disposto sul tavolo — carte **leggermente ruotate** e a
+**spaziatura non uniforme**. Una griglia fissa le taglia.
+
+Il primo tentativo è stato una **soglia di densità d'inchiostro**: sembra l'idea ovvia, ed è
+sbagliata. Le carte con pochi semi (il due, il quattro) sono quasi tutte bianche e **scendono sotto
+qualsiasi soglia sensata, sparendo**; quelle con un corridoio bianco verticale al centro **si
+spezzano in due**. Sulle quattro righe uscivano 11, 10, 9 e 9 colonne invece di 10.
+
+Quello che funziona è guardare il vuoto invece del pieno: **i corridoi bianchi fra una carta e
+l'altra**. Un corridoio è vuoto su tutta l'altezza della banda, mentre dentro una carta c'è sempre
+almeno il bordo superiore e inferiore a fare inchiostro. Con una tolleranza di 2 pixel escono
+**10 colonne esatte su tutte e quattro le righe**.
+
+### Modificato
+- La schermata provvisoria ora mostra il mazzo intero con punti e retro, per il controllo a vista.
+  Sarà sostituita dal tavolo vero in F3.
+
+### Note
+- ⚠️ La CI **non ha ancora mai girato**: l'account GitHub è bloccato per un problema di
+  fatturazione (`The job was not started because your account is locked due to a billing issue`).
+  Il workflow è corretto; il gate gira in locale ed è verde.
 
 ---
 
