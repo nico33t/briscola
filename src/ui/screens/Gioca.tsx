@@ -5,8 +5,12 @@ import type { GameState, Variante } from "@/core/types.ts";
 import { caricaPartita, dimenticaPartita } from "@/game/persistenza.ts";
 import type { ConfigPartita, Modalita } from "@/game/usePartita.ts";
 import { usePartita } from "@/game/usePartita.ts";
+import type { PartitaOnline } from "@/game/usePartitaOnline.ts";
+import { useClientOnline, useHostOnline } from "@/game/usePartitaOnline.ts";
 import { cn } from "@/lib/utils.ts";
 import { CartaImg } from "@/ui/Carta.tsx";
+import type { ConnessioneOnline } from "@/ui/OnlineLobby.tsx";
+import { OnlineLobby } from "@/ui/OnlineLobby.tsx";
 import { Link } from "@/ui/router.tsx";
 import { Tavolo } from "@/ui/Tavolo.tsx";
 
@@ -18,14 +22,33 @@ export function SchermataGioca() {
    */
   const [ripresa] = useState(() => caricaPartita());
   const [config, setConfig] = useState<ConfigPartita | null>(ripresa?.config ?? null);
+  const [modo, setModo] = useState<"locale" | "online">("locale");
+  const [connessioneOnline, setConnessioneOnline] = useState<ConnessioneOnline | null>(null);
 
   const esci = () => {
     dimenticaPartita();
     setConfig(null);
   };
 
+  const esciOnline = () => {
+    connessioneOnline?.transport.chiudi();
+    setConnessioneOnline(null);
+    setModo("locale");
+  };
+
+  // La partita online **non** si salva in `localStorage` (a differenza di quella
+  // locale): una connessione P2P non sopravvive a un refresh in nessun caso — non
+  // ha senso fingere una ripresa che non può funzionare. Ricaricare la pagina a
+  // metà partita online la fa perdere, dichiarato: implements.md §8.4.
+  if (connessioneOnline) {
+    return <PartitaOnlineInCorso connessione={connessioneOnline} onEsci={esciOnline} />;
+  }
+  if (modo === "online") {
+    return <OnlineLobby onConnesso={setConnessioneOnline} onIndietro={() => setModo("locale")} />;
+  }
+
   if (!config) {
-    return <Setup onGioca={setConfig} />;
+    return <Setup onGioca={setConfig} onOnline={() => setModo("online")} />;
   }
   return (
     <PartitaInCorso
@@ -34,6 +57,80 @@ export function SchermataGioca() {
       // premendo "Cambia partita" e ricominciando, si riparte pulito.
       statoIniziale={config === ripresa?.config ? ripresa.stato : undefined}
       onEsci={esci}
+    />
+  );
+}
+
+/** Monta l'hook giusto (host o client) in base a chi era, e aspetta che il motore
+ * abbia prodotto il suo primo snapshot prima di mostrare il tavolo. */
+function PartitaOnlineInCorso({
+  connessione,
+  onEsci,
+}: {
+  readonly connessione: ConnessioneOnline;
+  readonly onEsci: () => void;
+}) {
+  if (connessione.ruolo === "host") {
+    return (
+      <TavoloHostOnline transport={connessione.transport} seed={connessione.seed} onEsci={onEsci} />
+    );
+  }
+  return <TavoloClientOnline transport={connessione.transport} onEsci={onEsci} />;
+}
+
+function TavoloHostOnline({
+  transport,
+  seed,
+  onEsci,
+}: {
+  readonly transport: ConnessioneOnline["transport"];
+  readonly seed: number;
+  readonly onEsci: () => void;
+}) {
+  const partita = useHostOnline(transport, seed);
+  return <TavoloOnlineOAttesa partita={partita} onEsci={onEsci} />;
+}
+
+function TavoloClientOnline({
+  transport,
+  onEsci,
+}: {
+  readonly transport: ConnessioneOnline["transport"];
+  readonly onEsci: () => void;
+}) {
+  const partita = useClientOnline(transport);
+  return <TavoloOnlineOAttesa partita={partita} onEsci={onEsci} />;
+}
+
+function TavoloOnlineOAttesa({
+  partita,
+  onEsci,
+}: {
+  readonly partita: PartitaOnline;
+  readonly onEsci: () => void;
+}) {
+  if (!partita.pronto) {
+    return (
+      <main className="table-felt flex min-h-dvh flex-col items-center justify-center gap-3 px-6 py-12">
+        <div
+          aria-hidden
+          className="h-8 w-8 animate-spin rounded-full border-2 border-brass/30 border-t-brass"
+        />
+        <p className="text-on-felt text-sm">Sincronizzazione…</p>
+      </main>
+    );
+  }
+  return (
+    <Tavolo
+      partita={partita}
+      modalita="online"
+      online={{
+        ruolo: partita.ruolo,
+        connessione: partita.connessione,
+        seatRemotoInAI: partita.seatRemotoInAI,
+        continuaControAI: partita.continuaControAI,
+      }}
+      onEsci={onEsci}
     />
   );
 }
@@ -98,7 +195,13 @@ const LIVELLI: readonly { valore: Livello; titolo: string; nota: string }[] = [
   },
 ];
 
-function Setup({ onGioca }: { readonly onGioca: (config: ConfigPartita) => void }) {
+function Setup({
+  onGioca,
+  onOnline,
+}: {
+  readonly onGioca: (config: ConfigPartita) => void;
+  readonly onOnline: () => void;
+}) {
   const [variante, setVariante] = useState<Variante>("1v1");
   const [modalita, setModalita] = useState<Modalita>("ai");
   const [livello, setLivello] = useState<Livello>("medio");
@@ -188,6 +291,24 @@ function Setup({ onGioca }: { readonly onGioca: (config: ConfigPartita) => void 
         >
           Gioca
         </Button>
+
+        <div className="mt-4 flex items-center gap-3 text-on-felt-muted/50 text-xs">
+          <span className="h-px flex-1 bg-white/10" />
+          oppure
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
+        <button
+          type="button"
+          onClick={onOnline}
+          className="mt-4 w-full rounded-xl border border-white/12 px-4 py-3 text-left transition-colors hover:border-brass/35 hover:bg-felt-deep/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+        >
+          <span className="block font-medium text-on-felt text-sm">
+            Gioca online, con un amico →
+          </span>
+          <span className="block text-on-felt-muted text-xs">
+            1 contro 1, senza server: un codice QR fa da tramite
+          </span>
+        </button>
 
         <div className="mt-10 flex justify-center gap-1 opacity-60">
           <CartaImg carta={{ seme: "denari", rango: "asso" }} className="w-12" />

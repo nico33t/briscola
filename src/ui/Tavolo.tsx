@@ -14,6 +14,7 @@ import { squadraDi } from "@/core/rules.ts";
 import type { Carta, Seat, Squadra } from "@/core/types.ts";
 import type { Modalita, Partita } from "@/game/usePartita.ts";
 import { cn } from "@/lib/utils.ts";
+import type { Ruolo, StatoConnessione } from "@/transport/types.ts";
 import { CartaImg, nomeCarta } from "@/ui/Carta.tsx";
 import {
   confermaSblocco,
@@ -22,9 +23,28 @@ import {
 } from "@/ui/privacyHotSeat.ts";
 import { SchermoPrivacy } from "@/ui/SchermoPrivacy.tsx";
 
+/**
+ * `"online"` si aggiunge a `Modalita` (che resta "ai" | "locale" — il vocabolario
+ * di `usePartita.ts`/`ConfigPartita`, invariato) solo per le decisioni di
+ * rendering qui dentro: nome dei posti, titolo di fine partita. Non a caso i due
+ * `if (modalita === "locale")` già esistenti bastano da soli a escludere "online"
+ * per costruzione — online eredita lo stesso ramo "contro qualcuno remoto" già
+ * scritto per "ai" (mostra "Tu"/"Avversario", niente schermo privacy).
+ */
+export type ModalitaVisualizzazione = Modalita | "online";
+
+/** Presente solo in modalità "online": stato della connessione P2P e, per l'host, la via d'uscita dopo una disconnessione. */
+export interface InfoOnline {
+  readonly ruolo: Ruolo;
+  readonly connessione: StatoConnessione;
+  readonly seatRemotoInAI: boolean;
+  readonly continuaControAI: () => void;
+}
+
 interface Props {
   readonly partita: Partita;
-  readonly modalita: Modalita;
+  readonly modalita: ModalitaVisualizzazione;
+  readonly online?: InfoOnline;
   readonly onEsci: () => void;
 }
 
@@ -72,7 +92,12 @@ function squadreDi(giocatori: number): readonly (readonly Seat[])[] {
   return squadre;
 }
 
-function nomeSeat(seat: Seat, modalita: Modalita, seatUmano: Seat, giocatori: number): string {
+function nomeSeat(
+  seat: Seat,
+  modalita: ModalitaVisualizzazione,
+  seatUmano: Seat,
+  giocatori: number,
+): string {
   if (modalita === "locale") return `Giocatore ${seat + 1}`;
   if (seat === seatUmano) return "Tu";
   if (giocatori <= 2) return "Avversario";
@@ -85,14 +110,14 @@ function nomeSeat(seat: Seat, modalita: Modalita, seatUmano: Seat, giocatori: nu
 
 function nomeSquadra(
   squadra: readonly Seat[],
-  modalita: Modalita,
+  modalita: ModalitaVisualizzazione,
   seatUmano: Seat,
   giocatori: number,
 ): string {
   return squadra.map((seat) => nomeSeat(seat, modalita, seatUmano, giocatori)).join(" e ");
 }
 
-export function Tavolo({ partita, modalita, onEsci }: Props) {
+export function Tavolo({ partita, modalita, online, onEsci }: Props) {
   const {
     stato,
     bancoVisibile,
@@ -106,6 +131,24 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
   } = partita;
   const giocatori = numeroGiocatori(stato.variante);
   const [abbandonaAperto, setAbbandonaAperto] = useState(false);
+
+  /**
+   * Dialog di disconnessione (implements.md §8.4): appare quando il trasporto
+   * P2P non è più "connesso" e la partita non è già finita. Chiuderlo (scelta
+   * esplicita, o l'host che sceglie di continuare contro l'IA) lo tiene chiuso
+   * finché la connessione non torna "connesso" e cade di nuovo — niente
+   * riconnessione automatica in questa fase, è l'utente a decidere ogni volta.
+   */
+  const [dialogDisconnessioneChiuso, setDialogDisconnessioneChiuso] = useState(false);
+  useEffect(() => {
+    if (online?.connessione === "connesso") setDialogDisconnessioneChiuso(false);
+  }, [online?.connessione]);
+  const mostraDialogDisconnessione =
+    online !== undefined &&
+    online.connessione !== "connesso" &&
+    stato.fase !== "fine" &&
+    !dialogDisconnessioneChiuso &&
+    !(online.ruolo === "host" && online.seatRemotoInAI);
 
   /**
    * Hot-seat: a ogni cambio di turno lo schermo va coperto finché il
@@ -183,14 +226,17 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
         {/* Alto: il compagno nel 2v2, l'unico avversario nell'1v1 */}
         <section className="flex flex-col items-center gap-2">
           <div className="flex w-full max-w-2xl items-center justify-between text-xs">
-            <button
-              type="button"
-              aria-haspopup="dialog"
-              onClick={() => setAbbandonaAperto(true)}
-              className="text-on-felt-muted hover:text-on-felt"
-            >
-              Abbandona
-            </button>
+            <span className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                onClick={() => setAbbandonaAperto(true)}
+                className="text-on-felt-muted hover:text-on-felt"
+              >
+                Abbandona
+              </button>
+              {online && <IndicatoreConnessione connessione={online.connessione} />}
+            </span>
             {giocatori > 2 && (
               <span className="text-on-felt-muted">
                 Voi{" "}
@@ -329,7 +375,9 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
                   ? modalita === "locale"
                     ? `Tocca a ${nomeSeat(stato.turno, modalita, seatVisibile, giocatori)}`
                     : "Tocca a te"
-                  : ""}
+                  : online && stato.fase !== "fine"
+                    ? "In attesa dell'avversario…"
+                    : ""}
           </p>
 
           <ul className="flex items-end gap-2 sm:gap-3" aria-label="Le tue carte">
@@ -405,7 +453,78 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {online && (
+        <Dialog
+          open={mostraDialogDisconnessione}
+          onOpenChange={() => setDialogDisconnessioneChiuso(true)}
+        >
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>
+                {online.ruolo === "host"
+                  ? "Connessione persa con l'avversario"
+                  : "Connessione persa con l'host"}
+              </DialogTitle>
+              <DialogDescription>
+                {online.ruolo === "host"
+                  ? "Il canale con l'altro telefono si è interrotto. Potete continuare la partita contro il computer, o uscire — non c'è una riconnessione automatica."
+                  : "Senza l'host la partita non può proseguire: non c'è una riconnessione automatica. Puoi solo tornare al menu."}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="sm:flex-col sm:gap-2">
+              {online.ruolo === "host" && (
+                <Button
+                  onClick={() => {
+                    online.continuaControAI();
+                    setDialogDisconnessioneChiuso(true);
+                  }}
+                  className="w-full"
+                >
+                  Continua contro il computer
+                </Button>
+              )}
+              <Button
+                variant={online.ruolo === "host" ? "outline" : "default"}
+                onClick={() => {
+                  partita.abbandona();
+                  onEsci();
+                }}
+                className="w-full"
+              >
+                {online.ruolo === "host" ? "Esci" : "Torna al menu"}
+              </Button>
+              {online.ruolo === "host" && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setDialogDisconnessioneChiuso(true)}
+                  className="w-full"
+                >
+                  Aspetta ancora
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
+  );
+}
+
+/** Pallino + etichetta dello stato della connessione P2P, sempre visibile in modalità "online". */
+function IndicatoreConnessione({ connessione }: { readonly connessione: StatoConnessione }) {
+  const stile: Record<StatoConnessione, { readonly colore: string; readonly testo: string }> = {
+    connesso: { colore: "bg-emerald-400", testo: "Connesso" },
+    connettendo: { colore: "bg-amber-400 animate-pulse", testo: "Connessione…" },
+    disconnesso: { colore: "bg-destructive animate-pulse", testo: "Disconnesso" },
+    chiuso: { colore: "bg-on-felt-muted/40", testo: "Chiuso" },
+  };
+  const { colore, testo } = stile[connessione];
+  return (
+    <span className="flex items-center gap-1.5 text-on-felt-muted/80">
+      <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", colore)} />
+      {testo}
+    </span>
   );
 }
 
@@ -421,7 +540,7 @@ function ManoLaterale({
   readonly seat: Seat;
   readonly mano: readonly Carta[];
   readonly punti: number;
-  readonly modalita: Modalita;
+  readonly modalita: ModalitaVisualizzazione;
   readonly seatVisibile: Seat;
   readonly giocatori: number;
 }) {
@@ -489,11 +608,15 @@ function FinePartita({ partita, modalita, onEsci }: Props) {
         </div>
 
         <DialogFooter className="sm:flex-col sm:gap-2">
-          <Button onClick={partita.ricomincia} className="w-full">
-            Rivincita
-          </Button>
+          {/* Online: niente rivincita in F6 — risincronizzare due stati
+              indipendenti da zero è fuori scope, vedi implements.md §8.4. */}
+          {modalita !== "online" && (
+            <Button onClick={partita.ricomincia} className="w-full">
+              Rivincita
+            </Button>
+          )}
           <Button variant="outline" onClick={onEsci} className="w-full">
-            Cambia partita
+            {modalita === "online" ? "Torna al menu" : "Cambia partita"}
           </Button>
         </DialogFooter>
       </DialogContent>

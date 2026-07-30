@@ -8,12 +8,141 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** ci si gioca, è **online**, si installa come app, contro il computer c'è
-> anche un livello che pensa sul serio, si può abbandonare una partita in corso, e in due (o in
-> quattro) sullo stesso device si passa il telefono senza sbirciare le carte degli altri. La
-> variante 2v2 è giocabile in locale, sia contro l'AI sia in hot-seat. Ogni partita finisce nelle
-> statistiche, con replay passo-passo per le ultime 20, e le regole sono spiegate a schermo.
-> Prossimo passo: il multiplayer P2P (F6), poi il 2v2 via P2P (F7 rimanente).
+> **Stato corrente:** ci si gioca, è **online sul proprio device** (PWA) e ora anche **online con
+> un amico** via P2P WebRTC (F6): un codice QR o una stringa da incollare bastano a far incontrare
+> due telefoni senza server. Contro il computer c'è un livello che pensa sul serio, si può
+> abbandonare una partita in corso, e in due (o in quattro) sullo stesso device si passa il
+> telefono senza sbirciare le carte degli altri. La variante 2v2 è giocabile in locale, sia contro
+> l'AI sia in hot-seat — il 2v2 via P2P (topologia a stella) resta il prossimo passo (F7 rimanente).
+> Ogni partita finisce nelle statistiche, con replay passo-passo per le ultime 20 (solo le partite
+> locali/vs AI: l'online non è ancora tracciato, vedi 0.11.0), e le regole sono spiegate a schermo.
+
+---
+
+## [0.11.0] — 2026-07-30 — Multiplayer P2P via WebRTC, 1v1 (F6)
+
+### Aggiunto
+- **`src/transport/`**, nuovo modulo, quattro file:
+  - `types.ts` — interfaccia `Transport` (`invia`/`onMessaggio`/`onStato`/`chiudi`, la stessa forma
+    di un `RTCDataChannel` reale) e lo schema dei messaggi del protocollo, versionato (`{v: 1,
+    type: ...}`). Nomi in italiano, coerenti col resto del codice: `BENVENUTO`, `GIOCA_CARTA`
+    (l'unica intenzione che il client può mandare), `AGGIORNAMENTO` (infoset + eventi pubblici,
+    host → client), `RIFIUTO`, `PING`/`PONG`, `BYE`. Rispetto alla bozza di implements.md §8.3
+    (HELLO/STATE/PLAY_CARD/EVENT/PING/BYE), `STATE` ed `EVENT` sono stati accorpati in
+    `AGGIORNAMENTO` (arrivano sempre insieme) e aggiunto `PONG` per un battito cardiaco simmetrico.
+  - `protocollo.ts` — validazione **pura** di ogni messaggio in arrivo: forma campo per campo
+    (stesso pattern difensivo di `game/persistenza.ts`, duplicato apposta invece di importato per
+    non far dipendere `transport/` da `game/`), poi limite di **8 KB** per messaggio. Scarto
+    silenzioso con contatore diagnostico, mai un'eccezione.
+  - `locale.ts` — trasporto in-process (due estremità in memoria, consegna asincrona via
+    microtask): serve a testare tutto il protocollo senza rete, stessa interfaccia esatta del
+    trasporto WebRTC.
+  - `webrtc.ts` — `RTCPeerConnection` + `RTCDataChannel`, signaling manuale: offerta/risposta SDP,
+    **niente trickle ICE** (si aspetta `iceGatheringState === 'complete'`, con un tetto di 4 s),
+    compressione **deflate + base64url** (`CompressionStream`, con fallback senza compressione se
+    l'API manca) prima di trasformare l'SDP in blob per QR/testo.
+- **`src/game/motoreOnline.ts`** — il motore host/client, **TypeScript puro, zero React** (stesso
+  principio di `ui/privacyHotSeat.ts`): due fabbriche, `creaMotoreHost`/`creaMotoreClient`, pilotabili
+  in un test senza montare un componente. `game/usePartitaOnline.ts` le avvolge in due hook React
+  sottili (`useHostOnline`/`useClientOnline`) che rimappano lo snapshot nella stessa forma `Partita`
+  già usata da `usePartita.ts`, così `ui/Tavolo.tsx` la riusa quasi senza modifiche.
+- **Host autoritativo** (AGENTS.md §3.4): solo l'host chiama `core/machine.ts`. Ogni mossa (sua o
+  del client) produce un `AGGIORNAMENTO` con **solo l'infoset del client**, mai lo stato pieno.
+  - 🔴 **Bug vero trovato scrivendo `motoreOnline.test.ts`**: `core/machine.ts` produce un evento
+    `PESCATA` anche per la carta che pesca l'**host stesso**, con la carta esatta — mandarlo al
+    client rivelava quale carta l'host aveva appena pescato. Filtrato in uscita: al client arriva
+    solo la propria `PESCATA`, mai quella dell'host. Il test dedicato ("il client non riceve mai
+    una carta della mano dell'host o del mazzo") ispeziona ogni messaggio grezzo sul filo
+    confrontandolo con una copia indipendente dello stato vero, avanzata con le stesse mosse.
+- **Lobby P2P** (`ui/OnlineLobby.tsx`, voce "Gioca online, con un amico →" in `#/gioca`): host crea
+  offerta → QR + stringa copiabile; ospite incolla/scansiona → produce risposta → QR/stringa di
+  ritorno → l'host la incolla → connessi. Testo copiabile **sempre presente** accanto al QR (mai
+  solo QR): è il paracadute che funziona anche senza fotocamera o su Safari.
+- **QR senza dipendenza pesante**: aggiunta **`qrcode-generator@2.0.4`** (MIT, zero dipendenze
+  transitive, autore Kazuhiko Arase) — **in deroga ad AGENTS.md §6** (che chiede di chiedere prima
+  di una dipendenza runtime nuova), autorizzazione esplicita nel task che ha commissionato F6.
+  Motivo: generare un QR a mano (matrice Reed-Solomon) è realisticamente fuori budget per questo
+  lavoro, e la libreria è minuscola (il modulo usato, `dist/qrcode.mjs`, pesa ~52 KB non
+  minificato; il pacchetto npm è più grosso solo perché include bindings per altri linguaggi mai
+  importati). Resa come `<img src="data:...">` via `createDataURL()`, **mai**
+  `dangerouslySetInnerHTML` (AGENTS.md §4). Impatto sul bundle: +~39 KB non minificato
+  (370,56 → 370,69 KB — la cifra reale è quasi tutta dal resto del lavoro, il modulo QR si
+  minifica e comprime bene). Livello di correzione d'errore 'L' (capacità massima): il testo
+  copiabile è il paracadute per l'affidabilità, non serve ridondanza extra nel QR.
+- **Disconnessioni** (implements.md §8.4): battito cardiaco applicativo (`PING` ogni 3 s, chiunque
+  non dia più segno di vita per 9 s è considerato disconnesso — più veloce di aspettare che l'ICE
+  se ne accorga da solo, che può metterci diversi secondi). Indicatore di stato (pallino colorato
+  + etichetta) sempre visibile in modalità online. `Dialog` di disconnessione: l'**host** può
+  scegliere "Continua contro il computer" (il seat del client passa all'IA, livello Medio, non
+  configurabile) o uscire; il **client** ha solo "Torna al menu", con messaggio chiaro che senza
+  l'host la partita non può proseguire. **Niente riconnessione automatica**: dichiarato, fuori
+  scope.
+- **Integrazione `ui/Tavolo.tsx`**: `modalita` si allarga a `"online"` (il vocabolario di
+  `usePartita.ts`/`ConfigPartita` resta `"ai" | "locale"`, invariato — `"online"` esiste solo per
+  le decisioni di rendering). Lo schermo privacy hot-seat **non scatta mai online** per
+  costruzione (si attiva solo su `modalita === "locale"`, già vero prima). Nessuna rivincita
+  online in questa fase (risincronizzare due stati indipendenti da zero è fuori scope): il dialog
+  di fine partita mostra solo "Torna al menu".
+
+### Corretto (trovati verificando in browser reale, due schede — non dai test)
+- 🔴 **`OnlineLobby` chiudeva la connessione appena stabilita**: l'effetto di cleanup allo
+  smontaggio chiamava sempre `sessione.annulla()`, anche quando lo smontaggio era la **consegna
+  riuscita** del trasporto al tavolo (il genitore sostituisce la lobby col tavolo appena
+  `onConnesso` viene chiamato). Aggiunta una guardia (`consegnatoRef`) che salta l'`annulla()`
+  dopo una consegna riuscita.
+- 🔴 **`vivoRef` restava `false` per sempre dopo il primo render**, in sviluppo: `StrictMode`
+  monta-smonta-rimonta ogni effetto una volta per stanare side-effect impuri, e la cleanup
+  dell'effetto (che metteva `vivoRef.current = false`) scattava comunque — senza rimetterlo a
+  `true` nel corpo dell'effetto (non solo nella cleanup), ogni `await` della lobby si fermava in
+  silenzio al primo controllo, e "Preparazione del codice…" restava a schermo in eterno.
+- 🔴 **Race nel proxy del trasporto client**: il `RTCDataChannel` del client arriva tramite
+  l'evento `datachannel`, e può arrivare **già aperto** (l'evento `open` del canale può essere già
+  passato quando il codice lo osserva). Il proxy inoltrava solo i cambi di stato **futuri**: chi
+  si era iscritto prima (`OnlineLobby`, fin dall'inizio dell'attesa) non veniva mai notificato.
+  `collega()` ora notifica anche lo stato attuale, non solo quelli futuri.
+  
+  Questi tre bug — tutti su percorsi che passano da un componente React vero — non sono stati
+  scovati dai 25 test nuovi (che pilotano `motoreOnline.ts`/`protocollo.ts`/`locale.ts` senza
+  montare React): li ha rivelati solo la verifica in browser con due schede vere, che è per
+  questo un passo non negoziabile e non un extra.
+
+### Test
+25 test nuovi (238 totali, tutti verdi): `protocollo.test.ts` (16 — roundtrip, JSON rotto, campi
+mancanti/di tipo sbagliato, payload oltre il limite, prototype pollution), `locale.test.ts` (7),
+`webrtc.test.ts` (18 — compressione/decompressione, roundtrip su SDP finti realistici, input
+corrotto mai un'eccezione), `motoreOnline.test.ts` (14 — partita 1v1 completa via trasporto
+locale con esito identico sui due lati, il test di non-fuga delle carte nascoste, messaggi
+ostili/malformati scartati senza toccare lo stato, disconnessione e continuazione contro l'IA,
+battito cardiaco).
+
+### Verificato in browser reale (due schede, `npm run dev`)
+Partita completa: creata online nella prima scheda, stringa di signaling copiata e incollata
+nella seconda, risposta copiata e incollata di ritorno nella prima, canale aperto. **3 prese
+giocate fra le due schede** con punteggi verificati identici a ogni passo (11-11 dopo la terza).
+Chiusa la seconda scheda: dialog di disconnessione apparso nella prima nel tempo atteso, "Continua
+contro il computer" verificato funzionante (l'IA ha giocato il seat del client in automatico, la
+partita è proseguita). **Zero errori in console** per tutta la sessione.
+
+Nota tecnica sull'ambiente di verifica: il primo tentativo di connessione ha impiegato più del
+solito (l'agente ICE di Chrome ha impiegato ~90 s a stabilirsi, con un fallimento e un recupero
+automatico nel mezzo) — comportamento imputabile alla raggiungibilità dello STUN pubblico
+dall'ambiente sandbox usato per il test, non al codice: il codice ha aspettato pazientemente senza
+mostrare errori prematuri, ed è quello che ha permesso di notare (e poi correggere) i tre bug
+sopra. Su una LAN reale, senza bisogno di STUN, ci si aspetta l'ordine dei secondi visto nei test
+locali.
+
+### Fuori scope, dichiarato
+- **Scansione QR da fotocamera** (`BarcodeDetector`): manca su Safari, instabile da verificare su
+  tutti i browser in questa fase. Il flusso QR-mostrato + testo-incollato è già completo da solo
+  (si legge il QR con la fotocamera di un'altra app, o si passa la stringa a voce/messaggio).
+- **Riconnessione automatica**: se il canale cade, non si tenta di riaprirlo da soli. L'host può
+  continuare contro l'IA, il client può solo uscire.
+- **Rivincita online**: il dialog di fine partita in modalità online mostra solo "Torna al menu".
+- **Statistiche e replay online**: le partite online non finiscono in `briscola.statistiche.v1` né
+  generano un replay — restano solo quelle locali/contro l'IA. Non c'è nemmeno persistenza della
+  partita online in corso: un refresh la perde sempre (una connessione P2P non sopravviverebbe
+  comunque a un refresh).
+- **2v2 via P2P**: resta per F7, dietro la topologia a stella (implements.md §8.2).
 
 ---
 
