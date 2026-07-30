@@ -1,7 +1,10 @@
-import { Link, useRotta } from "@/ui/router.tsx";
+import { idReplayDaRotta, Link, useRotta } from "@/ui/router.tsx";
 import { SchermataCarte } from "@/ui/screens/Carte.tsx";
 import { SchermataGioca } from "@/ui/screens/Gioca.tsx";
 import { SchermataHome } from "@/ui/screens/Home.tsx";
+import { SchermataRegole } from "@/ui/screens/Regole.tsx";
+import { SchermataReplay } from "@/ui/screens/Replay.tsx";
+import { SchermataStatistiche } from "@/ui/screens/Statistiche.tsx";
 
 export function App() {
   const rotta = useRotta();
@@ -13,8 +16,18 @@ export function App() {
       return <SchermataCarte />;
     case "/gioca":
       return <SchermataGioca />;
-    default:
+    case "/regole":
+      return <SchermataRegole />;
+    case "/statistiche":
+      return <SchermataStatistiche />;
+    default: {
+      // `/replay/:id` non è una rotta piatta come le altre: si prova a
+      // interpretarla dopo lo switch, invece di introdurre rotte annidate nel
+      // router (che resta volutamente piatto — vedi ui/router.tsx).
+      const idReplay = idReplayDaRotta(rotta);
+      if (idReplay) return <SchermataReplay id={idReplay} />;
       return <NonTrovata percorso={rotta} />;
+    }
   }
 }
 

@@ -4,7 +4,13 @@ import { Link } from "@/ui/router.tsx";
 const VOCI = [
   { a: "/gioca", titolo: "Gioca", nota: "Contro il computer o in due", pronto: true },
   { a: "/carte", titolo: "Le carte", nota: "Tutte e 40, con i punti", pronto: true },
-  { a: "/regole", titolo: "Regole", nota: "Come si gioca a Briscola", pronto: false },
+  { a: "/regole", titolo: "Regole", nota: "Come si gioca a Briscola", pronto: true },
+  {
+    a: "/statistiche",
+    titolo: "Statistiche",
+    nota: "Partite, vittorie, striscia, replay",
+    pronto: true,
+  },
 ] as const;
 
 export function SchermataHome() {

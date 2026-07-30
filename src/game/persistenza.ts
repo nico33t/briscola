@@ -22,7 +22,8 @@ export interface PartitaSalvata {
   readonly stato: GameState;
 }
 
-function eCarta(valore: unknown): valore is Carta {
+/** Esportate: `game/replay.ts` le riusa per validare le azioni salvate coi replay. */
+export function eCarta(valore: unknown): valore is Carta {
   if (typeof valore !== "object" || valore === null) return false;
   const c = valore as Record<string, unknown>;
   return (
@@ -33,7 +34,7 @@ function eCarta(valore: unknown): valore is Carta {
   );
 }
 
-function eSeat(valore: unknown): valore is Seat {
+export function eSeat(valore: unknown): valore is Seat {
   return valore === 0 || valore === 1 || valore === 2 || valore === 3;
 }
 

@@ -26,6 +26,18 @@ function percorsoCorrente(): string {
   return normalizzaHash(window.location.hash);
 }
 
+/**
+ * Estrae l'id da un percorso `/replay/<id>`. `null` se il percorso non
+ * combacia — così `App.tsx` può provarlo dopo lo `switch` piatto senza
+ * introdurre un router con rotte annidate solo per questo caso.
+ */
+export function idReplayDaRotta(percorso: string): string | null {
+  const prefisso = "/replay/";
+  if (!percorso.startsWith(prefisso)) return null;
+  const id = percorso.slice(prefisso.length);
+  return id.length > 0 ? id : null;
+}
+
 function iscriviti(avvisa: () => void): () => void {
   window.addEventListener("hashchange", avvisa);
   return () => window.removeEventListener("hashchange", avvisa);

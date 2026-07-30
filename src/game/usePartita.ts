@@ -6,8 +6,9 @@ import { scegliCarta } from "@/ai/euristica.ts";
 import { infoSetPer } from "@/core/infoset.ts";
 import { applica, esito, nuovaPartita, puntiSeat } from "@/core/machine.ts";
 import { creaRng } from "@/core/rng.ts";
-import type { Carta, GameState, Giocata, Seat, Squadra, Variante } from "@/core/types.ts";
+import type { Azione, Carta, GameState, Giocata, Seat, Squadra, Variante } from "@/core/types.ts";
 import { dimenticaPartita, salvaPartita } from "@/game/persistenza.ts";
+import { registraFinePartita } from "@/game/statistiche.ts";
 
 /**
  * Il collante fra il motore e l'interfaccia.
@@ -71,6 +72,13 @@ export interface Partita {
   readonly vincitore: Squadra | null;
   gioca(carta: Carta): void;
   ricomincia(): void;
+  /**
+   * Registra l'abbandono nelle statistiche (sconfitta contro l'IA, "giocata"
+   * in hot-seat) prima che il chiamante esca dal tavolo. Non tocca lo stato
+   * React: chi chiama esce comunque subito dopo. Non fa nulla se la partita
+   * è già finita — è già stata registrata dall'effetto qui sotto.
+   */
+  abbandona(): void;
 }
 
 export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Partita {
@@ -82,9 +90,23 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
   const [spazzata, setSpazzata] = useState(false);
   const rng = useRef(creaRng(config.seed ^ 0x9e3779b9));
 
+  /**
+   * Log delle mosse davvero applicate, seme + azioni: è tutto ciò che serve
+   * per un replay deterministico (vedi `game/replay.ts`). Se questa istanza
+   * è partita da una partita ripresa da `localStorage` dopo un refresh, le
+   * mosse precedenti al refresh non ci sono: il replay per quella partita
+   * non sarebbe fedele, quindi si dichiara semplicemente non disponibile
+   * invece di salvarne uno silenziosamente sbagliato.
+   */
+  const azioniRef = useRef<Azione[]>([]);
+  const replayAffidabileRef = useRef(statoIniziale === undefined);
+  const registratoRef = useRef(false);
+
   const esegui = useCallback((corrente: GameState, seat: Seat, carta: Carta) => {
     const risultato = applica(corrente, { tipo: "GIOCA", seat, carta });
     if (!risultato.ok) return;
+
+    azioniRef.current.push({ tipo: "GIOCA", seat, carta });
 
     const evento = risultato.eventi.find((e) => e.tipo === "PRESA");
     if (evento?.tipo === "PRESA") {
@@ -119,11 +141,28 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
   /**
    * Ogni mossa finisce su disco: ricaricare la pagina per sbaglio non deve
    * cancellare una partita a metà. A partita finita si dimentica tutto, così
-   * al ritorno si riparte dal menu invece di riaprire un tavolo già chiuso.
+   * al ritorno si riparte dal menu invece di riaprire un tavolo già chiuso —
+   * e si registra l'esito nelle statistiche (e nel replay, se affidabile).
+   *
+   * `registratoRef` protegge da doppie registrazioni: senza, lo StrictMode di
+   * React (che in sviluppo rimonta gli effetti apposta) scriverebbe due volte
+   * la stessa partita in `localStorage`.
    */
   useEffect(() => {
     if (stato.fase === "fine") {
       dimenticaPartita();
+      if (!registratoRef.current) {
+        registratoRef.current = true;
+        registraFinePartita({
+          variante: config.variante,
+          modalita: config.modalita,
+          livello: config.livello,
+          seed,
+          stato,
+          azioni: replayAffidabileRef.current ? azioniRef.current : null,
+          abbandonata: false,
+        });
+      }
     } else {
       salvaPartita({ ...config, seed }, stato);
     }
@@ -212,7 +251,27 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
     setPresa(null);
     setSpazzata(false);
     setStato(nuovaPartita({ variante: config.variante, seed: nuovoSeed }));
+    // Una rivincita è una partita nuova e tracciata dall'inizio: azzera il
+    // log delle mosse e il permesso di registrarla come replay, anche se
+    // questa istanza dell'hook era partita da una partita ripresa.
+    azioniRef.current = [];
+    replayAffidabileRef.current = true;
+    registratoRef.current = false;
   }, [seed, config.variante]);
+
+  const abbandona = useCallback(() => {
+    if (stato.fase === "fine" || registratoRef.current) return;
+    registratoRef.current = true;
+    registraFinePartita({
+      variante: config.variante,
+      modalita: config.modalita,
+      livello: config.livello,
+      seed,
+      stato,
+      azioni: replayAffidabileRef.current ? azioniRef.current : null,
+      abbandonata: true,
+    });
+  }, [stato, config, seed]);
 
   const { punti: puntiSquadra, vincitore } = esito(stato);
 
@@ -230,5 +289,6 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
     vincitore: stato.fase === "fine" ? vincitore : null,
     gioca,
     ricomincia,
+    abbandona,
   };
 }

@@ -389,7 +389,14 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:flex-col sm:gap-2">
-            <Button variant="destructive" onClick={onEsci} className="w-full">
+            <Button
+              variant="destructive"
+              onClick={() => {
+                partita.abbandona();
+                onEsci();
+              }}
+              className="w-full"
+            >
               Abbandona
             </Button>
             <Button variant="outline" onClick={() => setAbbandonaAperto(false)} className="w-full">

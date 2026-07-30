@@ -11,8 +11,71 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 > **Stato corrente:** ci si gioca, è **online**, si installa come app, contro il computer c'è
 > anche un livello che pensa sul serio, si può abbandonare una partita in corso, e in due (o in
 > quattro) sullo stesso device si passa il telefono senza sbirciare le carte degli altri. La
-> variante 2v2 è giocabile in locale, sia contro l'AI sia in hot-seat.
+> variante 2v2 è giocabile in locale, sia contro l'AI sia in hot-seat. Ogni partita finisce nelle
+> statistiche, con replay passo-passo per le ultime 20, e le regole sono spiegate a schermo.
 > Prossimo passo: il multiplayer P2P (F6), poi il 2v2 via P2P (F7 rimanente).
+
+---
+
+## [0.10.0] — 2026-07-30 — Statistiche, replay e schermata regole (F5)
+
+### Aggiunto
+- **Statistiche** (`#/statistiche`, `game/statistiche.ts`): ogni partita finita — vinta, persa,
+  in pareggio o abbandonata — finisce in `briscola.statistiche.v1` (`localStorage`, nulla lascia
+  il device). Registra data, variante, modalità, livello IA (`null` in hot-seat), esito, punti
+  fatti/subiti. In hot-seat non esiste un "tu" da far vincere: l'esito degrada sempre a
+  `"giocata"`, ma la partita conta comunque nel totale. **Abbandonare conta come sconfitta**
+  contro l'IA (richiesto esplicitamente), come "giocata" in hot-seat. Schermata con totali
+  (giocate, vinte, % vittorie, striscia attuale/migliore — calcolate solo sulle partite contro
+  l'IA), spaccato per livello IA e per variante, elenco delle ultime partite. Pulsante "Azzera
+  statistiche" con `Dialog` di conferma, cancella insieme statistiche e replay. Validazione
+  difensiva del blob (`validaStatistiche`): a differenza di `validaSalvataggio` **non è
+  tutto-o-niente** — un record corrotto si scarta, gli altri restano, perché qui perdere una riga
+  di cronologia è meglio che azzerarla tutta per un byte fuori posto.
+- **Replay** (`#/replay/:id`, `game/replay.ts`): il core è un reducer puro con PRNG seedato
+  (`nuovaPartita({variante, seed})` + `applica` in sequenza), quindi un replay è solo **seme +
+  lista di azioni GIOCA** — non serve salvare `GameState` a ogni mossa. `ricostruisciPassi`
+  rigioca la sequenza chiamando lo stesso `core/machine.ts` di sempre: nessuna regola duplicata.
+  Schermata dedicata (`ui/screens/Replay.tsx`, non riusa `Tavolo.tsx` — quello è cablato su
+  `usePartita`, timer dell'AI e schermo privacy compresi, tutta roba che un replay di sola
+  lettura non usa): mani rivelate, banco del giro corrente, mazzo/briscola, punteggi live,
+  navigazione Inizio/Indietro/Avanti/Fine, play/pausa con tre velocità (1×/2×/4×), slider per
+  saltare a un passo qualsiasi. Elenco dei replay disponibili in cima a `#/statistiche`.
+  **Tetto alle ultime 20 partite** (`MAX_REPLAY` in `game/replay.ts`, chiave
+  `briscola.replays.v1`): oltre la soglia si scartano i replay più vecchi, che restano comunque
+  nelle statistiche senza le azioni.
+  - 🔴 **Determinismo verificato con un test dedicato**: si gioca una partita intera con
+    l'euristica (seme fisso), si registra ogni azione, si ricostruisce con
+    `ricostruisciPassi(variante, seme, azioni)` e si controlla che l'ultimo stato sia
+    **esattamente identico** (deep equal) allo stato finale vero, punteggi compresi — ripetuto su
+    1v1, 2v2 e più semi diversi.
+  - **Limite dichiarato**: se la pagina viene ricaricata a metà partita, il log delle azioni
+    riparte vuoto in quella sessione del browser (`game/usePartita.ts`, `azioniRef`) — quella
+    specifica partita non avrà un replay affidabile (lo dichiara: `replayAffidabileRef`), ma
+    resta comunque nelle statistiche. Verificato in browser: abbandonando una partita ripresa da
+    `localStorage` dopo un refresh, il record finisce nelle statistiche ma **non** genera un
+    replay; una partita giocata per intero nella stessa sessione ne genera uno con tutte le 40
+    azioni (1v1) e riproduce esattamente il punteggio finale.
+- **Schermata regole** (`#/regole`, `ui/screens/Regole.tsx`): contenuto statico curato in
+  italiano — mazzo e valori (con `CartaImg` per gli esempi), ordine di forza (diverso dai punti,
+  con la nota sul due di briscola), distribuzione e briscola, assenza di obbligo di rispondere al
+  seme, chi vince il giro, pescata, fine partita a 60/pareggio 60-60, varianti 1v1 e 2v2 con la
+  regola dei compagni alternati. Ogni affermazione verificata contro `core/rules.ts` e
+  `core/machine.ts` prima di scriverla: nessuna variante "di casa" non implementata (niente
+  chiamata, niente asta).
+- **Home**: due nuove voci pronte, "Regole" (prima disabilitata, in attesa di F5) e
+  "Statistiche".
+- **Abbandono collegato alle statistiche**: `usePartita.ts` espone `abbandona()`, chiamato dal
+  dialog di conferma in `Tavolo.tsx` prima di uscire dal tavolo — stessa logica di registrazione
+  della fine naturale, un solo punto (`registraFinePartita` in `game/statistiche.ts`) scrive sia
+  le statistiche sia (quando affidabile) il replay.
+- **Router**: `idReplayDaRotta` in `ui/router.tsx` per la rotta `/replay/:id`, provata dopo lo
+  `switch` piatto di `App.tsx` invece di introdurre rotte annidate — il router resta fatto a
+  mano, solo esteso.
+
+### Corretto
+- Nessuna correzione: solo funzionalità nuove, additive su `localStorage` (`.v1` invariato per le
+  chiavi esistenti, due chiavi nuove).
 
 ---
 

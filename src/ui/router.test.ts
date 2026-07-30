@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizzaHash } from "./router.tsx";
+import { idReplayDaRotta, normalizzaHash } from "./router.tsx";
 
 describe("normalizzaHash", () => {
   it("tratta l'hash vuoto come radice", () => {
@@ -30,5 +30,28 @@ describe("normalizzaHash", () => {
     for (const p of percorsi) {
       expect(normalizzaHash(normalizzaHash(p))).toBe(normalizzaHash(p));
     }
+  });
+
+  it("normalizza anche le rotte di replay (F5)", () => {
+    expect(normalizzaHash("#/replay/abc123")).toBe("/replay/abc123");
+    expect(normalizzaHash("#replay/abc123")).toBe("/replay/abc123");
+  });
+});
+
+describe("idReplayDaRotta", () => {
+  it("estrae l'id da un percorso di replay", () => {
+    expect(idReplayDaRotta("/replay/abc123")).toBe("abc123");
+    expect(idReplayDaRotta("/replay/p-abc-def")).toBe("p-abc-def");
+  });
+
+  it("restituisce null per percorsi che non sono di replay", () => {
+    expect(idReplayDaRotta("/statistiche")).toBeNull();
+    expect(idReplayDaRotta("/")).toBeNull();
+    expect(idReplayDaRotta("/gioca")).toBeNull();
+  });
+
+  it("restituisce null se manca l'id", () => {
+    expect(idReplayDaRotta("/replay")).toBeNull();
+    expect(idReplayDaRotta("/replay/")).toBeNull();
   });
 });
