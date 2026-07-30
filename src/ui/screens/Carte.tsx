@@ -125,7 +125,7 @@ export function SchermataCarte() {
             >
               pubblico dominio
             </a>{" "}
-            di Wikimedia Commons, ritagliate una per una.
+            di Wikimedia Commons (foto di Florixc), ritagliate una per una.
           </p>
         </section>
 
