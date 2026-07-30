@@ -150,29 +150,113 @@
       var(--felt-deep);
   }
 
+  /* ── Le carte giocate: arco naturale ──────────────────────────
+     Una carta calata non trasla in linea retta: parte ruotata, sale oltre
+     il punto di arrivo e si assesta con un piccolo rimbalzo — l'overshoot
+     vive nel keyframe stesso (60% oltre il 100%), non nella timing
+     function, per un effetto "a molla" puramente dichiarativo, senza
+     libreria. Chi la cala da sotto (la propria mano) e chi la cala da
+     sopra (l'avversario, nell'hot-seat) hanno la rotazione specchiata, così
+     le due direzioni non sembrano la stessa animazione ribaltata a caso. */
+  @keyframes gioca-dal-basso {
+    0% {
+      transform: translate(4%, 130%) rotate(-10deg) scale(0.82);
+      opacity: 0;
+    }
+    62% {
+      transform: translate(-2%, -6%) rotate(4deg) scale(1.05);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes gioca-dallalto {
+    0% {
+      transform: translate(-4%, -130%) rotate(10deg) scale(0.82);
+      opacity: 0;
+    }
+    62% {
+      transform: translate(2%, 6%) rotate(-4deg) scale(1.05);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+  }
+  .gioca-dal-basso {
+    animation: gioca-dal-basso 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .gioca-dallalto {
+    animation: gioca-dallalto 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* ── La carta arriva dal mazzo ─────────────────────────────────
+     Sia la distribuzione iniziale sia ogni pescata durante il giro usano lo
+     stesso ingresso: la carta arriva da dove sta il mazzo (in alto a
+     destra sul tavolo), ruotata come appena sfilata da un dealer, e si posa
+     dritta nella mano. */
+  @keyframes pescata-in-mano {
+    0% {
+      transform: translate(85%, -120%) rotate(22deg) scale(0.8);
+      opacity: 0;
+    }
+    55% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+  }
+  .pescata-in-mano {
+    animation: pescata-in-mano 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
   /* ── Il volo della presa ──────────────────────────────────────
      Quando un giro si chiude, le carte non spariscono: vanno verso
      chi le ha vinte. È il gesto che al tavolo dice "queste sono mie",
-     e senza di esso il punteggio sembra cambiare da solo.
-     La durata deve combaciare con VOLO_PRESA_MS in usePartita.ts. */
+     e senza di esso il punteggio sembra cambiare da solo. Un piccolo
+     "strappo" (scala su, breve controrotazione) prima del volo vero e
+     proprio le fa sembrare afferrate, non solo spinte via.
+     La durata base (420ms) più lo scaglionamento fra le carte (60ms l'una,
+     vedi Tavolo.tsx) deve restare entro VOLO_PRESA_MS in usePartita.ts. */
   @keyframes vola-verso-il-basso {
+    0% {
+      transform: translateY(0) scale(1) rotate(0deg);
+      opacity: 1;
+    }
+    20% {
+      transform: translateY(-4%) scale(1.1) rotate(-4deg);
+      opacity: 1;
+    }
     to {
-      transform: translateY(58vh) scale(0.6) rotate(7deg);
+      transform: translateY(58vh) scale(0.55) rotate(10deg);
       opacity: 0;
     }
   }
   @keyframes vola-verso-l-alto {
+    0% {
+      transform: translateY(0) scale(1) rotate(0deg);
+      opacity: 1;
+    }
+    20% {
+      transform: translateY(4%) scale(1.1) rotate(4deg);
+      opacity: 1;
+    }
     to {
-      transform: translateY(-58vh) scale(0.6) rotate(-7deg);
+      transform: translateY(-58vh) scale(0.55) rotate(-10deg);
       opacity: 0;
     }
   }
 
   .vola-giu {
-    animation: vola-verso-il-basso 480ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
+    animation: vola-verso-il-basso 420ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
   }
   .vola-su {
-    animation: vola-verso-l-alto 480ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
+    animation: vola-verso-l-alto 420ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
   }
 
   /* Il respiro della carta di turno: appena percettibile, serve solo a dire

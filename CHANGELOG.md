@@ -8,9 +8,80 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** ci si gioca, è **online**, si installa come app, e contro il computer c'è
-> anche un livello che pensa sul serio.
+> **Stato corrente:** ci si gioca, è **online**, si installa come app, contro il computer c'è
+> anche un livello che pensa sul serio, si può abbandonare una partita in corso, e in due sullo
+> stesso device si passa il telefono senza sbirciare le carte dell'altro.
 > Prossimo passo: la variante 2v2, poi il multiplayer P2P (F6).
+
+---
+
+## [0.8.0] — 2026-07-30 — Abbandona partita, schermo privacy hot-seat, animazioni rifatte
+
+### Aggiunto
+- **Abbandona partita**: voce discreta "Abbandona" nell'angolo in alto a sinistra del tavolo (al
+  posto del vecchio link "← Menu", che usciva senza chiedere conferma e senza ripulire il
+  salvataggio). Apre un `Dialog` shadcn di conferma ("Vuoi abbandonare la partita?"); alla
+  conferma richiama lo stesso `onEsci` già usato da "Cambia partita" a fine partita — pulisce
+  `briscola.partita.v1` (`dimenticaPartita()`) e torna al setup. Funziona identica in entrambe le
+  modalità (vs AI e in due): non serve nessuna logica specifica per modalità.
+- **Schermo privacy hot-seat** (`src/ui/SchermoPrivacy.tsx` + `src/ui/privacyHotSeat.ts`): **solo**
+  in modalità "in due", mai contro l'AI. A ogni cambio di turno tra i due giocatori, un overlay
+  nero a schermo intero copre le carte con "Tocca a te, Giocatore N" finché non si sblocca con un
+  doppio tocco/doppio click sull'overlay, o da tastiera con due Invio/Spazio ravvicinati (finestra
+  600ms). `role="dialog"` + `aria-modal="true"`, focus portato subito sull'overlay, e il contenuto
+  sottostante marcato `inert` mentre è attivo — irraggiungibile sia da tastiera che da screen
+  reader, non solo coperto visivamente.
+- **Animazioni riviste** (`src/index.css`, tutte transform/opacity, zero librerie nuove):
+  - **Carte giocate**: da traslazione dritta a un arco con leggero overshoot e rotazione
+    specchiata fra "dal basso" (propria mano) e "dall'alto" (avversario/hot-seat) — l'overshoot
+    vive nel keyframe stesso (60% oltre il 100%), non nella timing function, per un effetto "a
+    molla" puramente dichiarativo.
+  - **Presa vinta**: le carte volano verso il vincitore con un piccolo "strappo" (scala su +
+    controrotazione) prima del volo, e uno scaglionamento di 60ms fra le carte del giro invece di
+    volare tutte insieme.
+  - **Distribuzione e pescata**: nuova animazione `pescata-in-mano`, la carta arriva dalla
+    posizione del mazzo (in alto a destra) ruotata come appena sfilata da un dealer — sia
+    all'apertura della mano sia a ogni pescata durante il giro, che riusano lo stesso ingresso per
+    costruzione (ogni carta nuova nell'array della mano monta da sé).
+  - **Micro-interazioni**: hover con lift maggiore + ombra (`drop-shadow`) sulle carte in mano,
+    press più marcato e immediato — pensato anche per il touch, dove l'affordance "giocabile" resta
+    comunque leggibile dal contrasto pieno/attenuato fra carte giocabili e non.
+  - Tutte spente da `prefers-reduced-motion` tramite la regola universale già in `index.css`
+    (nessuna eccezione per classe: il blocco `*, *::before, *::after { animation-duration: 0.01ms
+    !important; ... }` copre anche le nuove classi per costruzione).
+
+### Test
+- `src/ui/privacyHotSeat.test.ts` (12 test): stato iniziale, nessuna reazione a turno invariato,
+  attesa che scatta al cambio turno, **nessuna reazione mentre la presa è in corso** (ferma o in
+  volo), scatto solo dopo che la presa ha finito di volare, nessuna attesa se il vincitore della
+  presa è già chi tiene il telefono, idempotenza, pulizia dell'attesa se il turno torna indietro
+  prima della conferma, sblocco in entrambe le direzioni (G1→G2 e G2→G1).
+- Suite completa: **128 test verdi** (116 preesistenti + 12 nuovi).
+
+### Perché — decisioni prese
+- **Overlay disaccoppiato da `stato.turno`**: il `core` fa passare il turno al vincitore della
+  presa nello stesso istante in cui la chiude, ma visivamente la presa resta ferma e poi vola per
+  ~1.3s (vedi `PAUSA_PRESA_MS`/`VOLO_PRESA_MS` in `usePartita.ts`, invariati). L'overlay privacy
+  aspetta che quella coreografia sia finita (`presa === null`) prima di attivarsi, altrimenti
+  nasconderebbe l'esito della mano a metà. Verificato in browser misurando i millisecondi reali
+  tra il click e la comparsa dell'overlay: la scritta "Presa di …" resta visibile ~1.3s con overlay
+  assente, poi l'overlay compare — combacia esattamente con le due costanti.
+  Verificato anche il caso limite: se lo stesso giocatore che teneva il telefono vince la propria
+  presa (resta lui di mano), l'overlay **non** scatta — non c'è nessun telefono da passare.
+- **`seatVisibile` invece di `seatUmano` in tutto il rendering del Tavolo**: finché l'overlay è a
+  schermo, la mano mostrata resta congelata sul giocatore già confermato (`privacy.seatConfermato`)
+  anche se il `core` ha già cambiato `stato.turno` — altrimenti la mano del prossimo giocatore
+  comparirebbe un istante prima che l'overlay la coprisse.
+- **Riuso di `onEsci` per "Abbandona"** invece di una nuova funzione: è lo stesso percorso già
+  testato per "Cambia partita" a fine partita (pulizia + ritorno al setup), niente logica duplicata.
+- **Niente `animate-in`/`slide-in-from-*` di tailwindcss-animate per le carte sul banco**: quelle
+  utility vivono nel layer CSS `utilities` (priorità più alta di `@layer base`, dove stanno le
+  nostre classi), quindi in teoria potrebbero vincere sulle proprietà di `.vola-giu`/`.vola-su` se
+  restassero applicate insieme. Le nuove classi d'ingresso (`gioca-dal-basso`/`gioca-dallalto`)
+  vivono anche loro in `@layer base`, stesso layer di `.vola-giu`/`.vola-su`: l'override fra le due
+  resta prevedibile (vince l'ultima dichiarata nel foglio), verificato in browser con
+  `getAnimations()` sull'elemento durante il volo — risulta in esecuzione solo
+  `vola-verso-il-basso`/`vola-verso-l-alto`, mai `enter`.
 
 ---
 
