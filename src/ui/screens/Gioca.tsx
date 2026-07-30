@@ -1,20 +1,14 @@
 import { useState } from "react";
 import type { Livello } from "@/ai/euristica.ts";
 import { Button } from "@/components/ui/button.tsx";
-import type { GameState } from "@/core/types.ts";
+import type { GameState, Variante } from "@/core/types.ts";
 import { caricaPartita, dimenticaPartita } from "@/game/persistenza.ts";
-import type { Modalita } from "@/game/usePartita.ts";
+import type { ConfigPartita, Modalita } from "@/game/usePartita.ts";
 import { usePartita } from "@/game/usePartita.ts";
 import { cn } from "@/lib/utils.ts";
 import { CartaImg } from "@/ui/Carta.tsx";
 import { Link } from "@/ui/router.tsx";
 import { Tavolo } from "@/ui/Tavolo.tsx";
-
-interface Configurata {
-  readonly modalita: Modalita;
-  readonly livello: Livello;
-  readonly seed: number;
-}
 
 export function SchermataGioca() {
   /**
@@ -23,7 +17,7 @@ export function SchermataGioca() {
    * Si legge una volta sola, al montaggio: dopo comanda lo stato in memoria.
    */
   const [ripresa] = useState(() => caricaPartita());
-  const [config, setConfig] = useState<Configurata | null>(ripresa?.config ?? null);
+  const [config, setConfig] = useState<ConfigPartita | null>(ripresa?.config ?? null);
 
   const esci = () => {
     dimenticaPartita();
@@ -50,7 +44,7 @@ function PartitaInCorso({
   statoIniziale,
   onEsci,
 }: {
-  readonly config: Configurata;
+  readonly config: ConfigPartita;
   readonly statoIniziale: GameState | undefined;
   readonly onEsci: () => void;
 }) {
@@ -58,14 +52,41 @@ function PartitaInCorso({
   return <Tavolo partita={partita} modalita={config.modalita} onEsci={onEsci} />;
 }
 
-const MODALITA: readonly { valore: Modalita; titolo: string; nota: string }[] = [
-  { valore: "ai", titolo: "Contro il computer", nota: "Un avversario che gioca sul serio" },
-  {
-    valore: "locale",
-    titolo: "In due, stesso device",
-    nota: "Ci si passa il telefono a ogni turno",
-  },
+const VARIANTI: readonly { valore: Variante; titolo: string; nota: string }[] = [
+  { valore: "1v1", titolo: "1 contro 1", nota: "Tu contro un solo avversario" },
+  { valore: "2v2", titolo: "In coppia, 2 contro 2", nota: "Tu e un compagno contro due avversari" },
 ];
+
+/** Le due modalità cambiano nome a seconda della variante, ma restano solo due:
+ * "contro il computer" (un solo umano, tutti gli altri posti AI) o "hot-seat"
+ * (tutti umani, ci si passa il device). Niente via di mezzo (due umani + due
+ * AI nel 2v2): la scelta binaria copre i due casi richiesti, di proposito. */
+function modalitaOpzioni(
+  variante: Variante,
+): readonly { valore: Modalita; titolo: string; nota: string }[] {
+  if (variante === "1v1") {
+    return [
+      { valore: "ai", titolo: "Contro il computer", nota: "Un avversario che gioca sul serio" },
+      {
+        valore: "locale",
+        titolo: "In due, stesso device",
+        nota: "Ci si passa il telefono a ogni turno",
+      },
+    ];
+  }
+  return [
+    {
+      valore: "ai",
+      titolo: "Contro il computer",
+      nota: "Tu e un compagno IA contro due avversari IA",
+    },
+    {
+      valore: "locale",
+      titolo: "In quattro, stesso device",
+      nota: "Ci si passa il telefono a ogni turno, in quattro",
+    },
+  ];
+}
 
 const LIVELLI: readonly { valore: Livello; titolo: string; nota: string }[] = [
   { valore: "facile", titolo: "Facile", nota: "Sbaglia spesso, va bene per imparare" },
@@ -77,7 +98,8 @@ const LIVELLI: readonly { valore: Livello; titolo: string; nota: string }[] = [
   },
 ];
 
-function Setup({ onGioca }: { readonly onGioca: (config: Configurata) => void }) {
+function Setup({ onGioca }: { readonly onGioca: (config: ConfigPartita) => void }) {
+  const [variante, setVariante] = useState<Variante>("1v1");
   const [modalita, setModalita] = useState<Modalita>("ai");
   const [livello, setLivello] = useState<Livello>("medio");
 
@@ -89,14 +111,33 @@ function Setup({ onGioca }: { readonly onGioca: (config: Configurata) => void })
         </Link>
 
         <h1 className="mt-3 font-semibold text-3xl text-on-felt tracking-tight">Nuova partita</h1>
-        <p className="mt-1 text-on-felt-muted text-sm">Briscola 1 contro 1, 40 carte.</p>
+        <p className="mt-1 text-on-felt-muted text-sm">
+          {variante === "1v1" ? "Briscola 1 contro 1, 40 carte." : "Briscola in coppia, 40 carte."}
+        </p>
 
         <fieldset className="mt-7">
+          <legend className="mb-2 text-on-felt-muted text-xs uppercase tracking-widest">
+            Variante
+          </legend>
+          <div className="flex flex-col gap-2">
+            {VARIANTI.map((voce) => (
+              <SceltaRiga
+                key={voce.valore}
+                titolo={voce.titolo}
+                nota={voce.nota}
+                attiva={variante === voce.valore}
+                onClick={() => setVariante(voce.valore)}
+              />
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="mt-6">
           <legend className="mb-2 text-on-felt-muted text-xs uppercase tracking-widest">
             Con chi
           </legend>
           <div className="flex flex-col gap-2">
-            {MODALITA.map((voce) => (
+            {modalitaOpzioni(variante).map((voce) => (
               <SceltaRiga
                 key={voce.valore}
                 titolo={voce.titolo}
@@ -124,6 +165,11 @@ function Setup({ onGioca }: { readonly onGioca: (config: Configurata) => void })
                 />
               ))}
             </div>
+            {variante === "2v2" && (
+              <p className="mt-2 text-on-felt-muted/70 text-xs">
+                Vale per tutti e tre gli avversari IA, compreso il tuo compagno.
+              </p>
+            )}
             {livello === "esperto" && (
               <p className="mt-2 text-on-felt-muted/70 text-xs">
                 Ci pensa un attimo di più: la ricerca gira in un Web Worker, senza bloccare
@@ -137,7 +183,7 @@ function Setup({ onGioca }: { readonly onGioca: (config: Configurata) => void })
           size="lg"
           className="mt-8 w-full"
           onClick={() =>
-            onGioca({ modalita, livello, seed: Math.floor(Math.random() * 0xffffffff) })
+            onGioca({ variante, modalita, livello, seed: Math.floor(Math.random() * 0xffffffff) })
           }
         >
           Gioca

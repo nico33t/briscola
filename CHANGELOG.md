@@ -9,9 +9,117 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 ## [Unreleased]
 
 > **Stato corrente:** ci si gioca, è **online**, si installa come app, contro il computer c'è
-> anche un livello che pensa sul serio, si può abbandonare una partita in corso, e in due sullo
-> stesso device si passa il telefono senza sbirciare le carte dell'altro.
-> Prossimo passo: la variante 2v2, poi il multiplayer P2P (F6).
+> anche un livello che pensa sul serio, si può abbandonare una partita in corso, e in due (o in
+> quattro) sullo stesso device si passa il telefono senza sbirciare le carte degli altri. La
+> variante 2v2 è giocabile in locale, sia contro l'AI sia in hot-seat.
+> Prossimo passo: il multiplayer P2P (F6), poi il 2v2 via P2P (F7 rimanente).
+
+---
+
+## [0.9.0] — 2026-07-30 — Variante 2v2 giocabile in locale (F7, parte locale)
+
+### Aggiunto
+- **Setup 2v2** (`ui/screens/Gioca.tsx`): nuova scelta "Variante" (1 contro 1 / in coppia 2 contro
+  2) sopra la scelta "Con chi", che ora si adatta al testo secondo la variante. Per il 2v2 due
+  modalità, entrambe riuso della stessa `Modalita` binaria già esistente (`"ai" | "locale"`), senza
+  aggiungere un terzo valore:
+  - **Contro il computer**: umano al seat 0, AI ovunque altro — compreso il compagno al seat 2. Un
+    solo livello di difficoltà selezionabile, valido per tutti e tre gli avversari IA (dichiarato a
+    schermo: "Vale per tutti e tre gli avversari IA, compreso il tuo compagno").
+  - **In quattro**: hot-seat, quattro umani sullo stesso device, si passa il telefono a ogni turno.
+  - **Fuori scope, deliberatamente**: una via di mezzo (due umani + due AI) non esiste. Il binomio
+    `Modalita` la escluderebbe comunque senza un terzo stato, e non era richiesta — vedi "Perché"
+    più sotto.
+- **Tavolo 2v2** (`ui/Tavolo.tsx`): quattro posizioni — basso (tu), destra, alto (compagno),
+  sinistra — nel giro orario che rispecchia come ci si siede davvero attorno a un tavolo da coppie
+  (0+2 contro 1+3, `squadraDi` del core). Banco fino a 4 carte per presa. Punteggio di squadra
+  live in alto ("Voi X · Loro Y", solo nel 2v2) più il punteggio per singolo posto accanto a ogni
+  mano, come nell'1v1. Nomi automatici: "Tu", "Compagno", "Avversario 1"/"Avversario 2" in modalità
+  AI; "Giocatore 1..4" in hot-seat (generalizzazione della funzione già esistente per l'1v1).
+- **Animazioni laterali** (`index.css`): `gioca-da-sinistra`/`gioca-da-destra` (ingresso della
+  carta calata da un posto laterale, stessa idea ad arco+overshoot di `gioca-dal-basso`/
+  `gioca-dallalto` ma sull'asse orizzontale) e `vola-a-sinistra`/`vola-a-destra` (la presa vinta
+  vola verso un avversario laterale, stesso "strappo" prima del volo delle due esistenti verticali).
+  La direzione si sceglie in base alla posizione del vincitore rispetto a chi guarda
+  (`posizioneDi` in `Tavolo.tsx`), non più cablata a "sopra/sotto": l'1v1 continua a usare solo
+  `gioca-dal-basso`/`gioca-dallalto` perché con due posti l'offset è sempre 0 o "alto".
+- **`game/usePartita.ts` generalizzato da 2 a 4 posti**: l'unico posto umano in modalità "ai" resta
+  il seat 0 in entrambe le varianti; tutti gli altri (1 nell'1v1, 1-2-3 nel 2v2) sono AI e giocano
+  in sequenza — un solo Web Worker basta anche nel 2v2, perché un solo posto AI gioca alla volta.
+  **Ogni AI riceve solo il proprio `infoSetPer(stato, quel seat)`** (AGENTS.md §3.3): il
+  compagno-AI non vede la mano dell'umano più di quanto la veda un avversario — invariante
+  verificato dal test dedicato in `game/integrazione2v2.test.ts`. Aggiunto `puntiSquadra` al
+  `Partita` restituito dall'hook (riusa `esito(stato).punti`, nessun calcolo duplicato).
+- **Persistenza 2v2** (`game/persistenza.ts`): `ConfigPartita` ha un nuovo campo `variante`.
+  Migrazione difensiva, non un bump di chiave: un salvataggio senza `config.variante` (quelli
+  scritti prima di questa versione) resta valido e defaulta alla `variante` già letta dallo
+  `stato` — che per un salvataggio pre-2v2 è sempre stata `"1v1"`. Nuova validazione: il numero di
+  mani/prese nello stato deve combaciare con `numeroGiocatori(variante)` (un 2v2 con due sole mani
+  è uno stato che il core non produce mai da solo, quindi è manomesso o corrotto).
+
+### Corretto
+- **`validaSalvataggio` accettava solo `livello: "facile" | "medio"`**, escludendo `"esperto"` per
+  una svista risalente a prima che il livello Esperto esistesse (F4, 0.7.0): un salvataggio con
+  l'AI Esperta veniva scartato in silenzio al primo refresh, sia nell'1v1 sia nel 2v2. Bug
+  pre-esistente, non introdotto da questa fase — corretto qui perché toccava direttamente la
+  persistenza del 2v2 con Esperto, che questa fase doveva garantire.
+
+### Test
+- `src/game/integrazione2v2.test.ts` (nuovo, 7 test): partita 2v2 completa **giocata da quattro AI
+  euristiche** attraverso lo stesso percorso di `usePartita` (reducer puro + `scegliCarta`, mai
+  `usePartita` stesso — è un hook React, si guida il reducer direttamente come fa già
+  `machine.test.ts`), su decine di seed diversi. Verifica: la partita finisce sempre, mani e mazzo
+  si svuotano, **120 punti esatti di squadra** su 60 partite, 40 carte tutte distinte finiscono
+  nelle prese, `esito()` dichiara la squadra giusta o il pareggio 60-60, i punti di squadra restano
+  la somma dei compagni. Test dedicato che rigioca una partita registrando **a ogni turno** se
+  l'infoset di quel seat conteneva una carta di un altro seat: mai, su tutta la partita — la
+  verifica strutturale dell'invariante AGENTS.md §3.3 applicata a una partita 2v2 intera, non solo
+  a chiamate isolate.
+- `src/ui/privacyHotSeat.test.ts` (+5 test): rotazione completa 0→1→2→3→0 a quattro posti, il
+  compagno (seat 2, "di fronte" nel giro) va in attesa come chiunque altro, nessuna reazione mentre
+  la presa vola anche a metà di un giro a 4, idempotenza per ciascuno dei tre seat non confermati,
+  pulizia dell'attesa se il turno torna indietro saltando posti. **Il modulo non è stato toccato**:
+  questi test dimostrano che la logica esistente (mai scritta pensando solo a due posti) gira
+  identica a quattro — nessuna riga nuova in `privacyHotSeat.ts`.
+- `src/game/persistenza.test.ts` (+8 test): accetta una partita 2v2 salvata, accetta il livello
+  Esperto (prova della correzione sopra), migrazione di un salvataggio senza `config.variante`,
+  rifiuta una `variante` inventata (in config o in stato), rifiuta un `config.variante` che non
+  combacia con `stato.variante`, rifiuta un 2v2 con solo due mani.
+- Suite completa: **146 test verdi** (128 preesistenti + 18 nuovi).
+
+### Perché — decisioni prese
+- **Nessuna modalità "due umani + due AI"**: il compito la lasciava fuori esplicitamente se avesse
+  complicato troppo. Con `Modalita` binaria, "contro il computer" è sempre "un solo umano, il
+  resto AI" e "locale" è sempre "tutti umani" — estendere a una combinazione intermedia avrebbe
+  richiesto un terzo stato e una UI per scegliere chi controlla ogni seat, un salto di complessità
+  non giustificato da questa fase (che è "locale, F7 parte 1" — il P2P vero, dove servirà comunque
+  distinguere "questo peer controlla quale seat", arriva in una fase successiva).
+- **`privacyHotSeat.ts` non toccato**: verificato leggendolo che nessuna funzione enumera "l'altro
+  giocatore" a mano — `Seat` era già `0|1|2|3` e la logica confronta sempre `turnoAttuale` con
+  `seatConfermato`, mai con un valore cablato. Estendere un modulo che già funziona sarebbe stato
+  lavoro sprecato e rischio di regressione; i test nuovi lo dimostrano invece di "fidarsi a vista".
+- **Un solo Web Worker anche nel 2v2**: i tre posti AI (o uno, nell'1v1) giocano sempre in
+  sequenza — mai in contemporanea, perché `core/machine.ts` è a turni singoli — quindi il client
+  esistente (`ai/client.ts`) si riusa senza modifiche: basta passare `stato.turno` invece del
+  vecchio `SEAT_AI` fisso.
+- **`squadreDi`/`nomeSquadra` invece di trattare 1v1 e 2v2 come due casi**: la schermata di fine
+  partita (`FinePartita` in `Tavolo.tsx`) raggruppa i posti per squadra con `squadraDi` del core;
+  nell'1v1 ogni squadra ha un solo posto e la stessa funzione produce lo stesso risultato di prima
+  — zero rami `if (variante === "2v2")` sparsi nel componente.
+- **Nessun buco trovato nel core**: `core/machine.ts`, `core/rules.ts` e `core/infoset.ts`
+  supportavano già il 2v2 per intero da F1 (`numeroGiocatori`, `squadraDi`, `puntiSquadra`,
+  distribuzione a 4 mani/28 carte residue) — confermato da `machine.test.ts` e `infoset.test.ts`
+  preesistenti. Nessuna riga toccata in nessuno dei tre file, come richiesto.
+- **Verificato in browser reale** (Chrome via chrome-devtools MCP, `npm run dev`): 2v2 contro il
+  computer giocato per 3 prese complete (mazzo 28→24→20→16, punteggi di squadra aggiornati
+  correttamente — "Loro 27" = 11+16), cambio di variante e modalità nel setup (le etichette
+  cambiano dinamicamente), partita 2v2 salvata e ripresa identica dopo un reload della pagina
+  (incluso `config.variante` nel salvataggio), hot-seat a quattro giocatori con overlay privacy
+  verificato sia visivamente sia nella rotazione della prospettiva (compagno/avversari
+  ricalcolati correttamente da qualunque seat), 1v1 rigiocato per verificare l'assenza di
+  regressioni. **Zero errori in console** in tutte le sessioni, a parte gli avvisi preesistenti di
+  sviluppo (Vite HMR, suggerimento React DevTools, un meta tag PWA deprecato non toccato da questa
+  fase).
 
 ---
 

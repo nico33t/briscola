@@ -6,7 +6,7 @@ import { scegliCarta } from "@/ai/euristica.ts";
 import { infoSetPer } from "@/core/infoset.ts";
 import { applica, esito, nuovaPartita, puntiSeat } from "@/core/machine.ts";
 import { creaRng } from "@/core/rng.ts";
-import type { Carta, GameState, Giocata, Seat } from "@/core/types.ts";
+import type { Carta, GameState, Giocata, Seat, Squadra, Variante } from "@/core/types.ts";
 import { dimenticaPartita, salvaPartita } from "@/game/persistenza.ts";
 
 /**
@@ -16,11 +16,18 @@ import { dimenticaPartita, salvaPartita } from "@/game/persistenza.ts";
  * è giusto per le regole, ma a schermo significherebbe veder sparire le carte
  * prima di aver capito chi ha vinto. Qui la presa resta ferma sul tavolo per
  * un attimo — lo stato vero è già avanti, quello mostrato aspetta.
+ *
+ * Generalizzato a N posti (F7, 0.9.0): nel 2v2 il seat 0 resta sempre "tu",
+ * tutti gli altri (1, 2 e 3 — compreso il compagno) sono AI in modalità
+ * "ai", o umani in hot-seat in modalità "locale". Non esiste una via di
+ * mezzo (due umani + due AI): la scelta binaria di `Modalita` copre solo le
+ * due combinazioni richieste, di proposito — vedi implements.md §9.
  */
 
 export type Modalita = "ai" | "locale";
 
 export interface ConfigPartita {
+  readonly variante: Variante;
   readonly modalita: Modalita;
   readonly livello: Livello;
   readonly seed: number;
@@ -33,7 +40,13 @@ const VOLO_PRESA_MS = 480;
 /** Pausa prima della mossa dell'AI: senza, sembra che bari. */
 const PAUSA_AI_MS = 800;
 
-const SEAT_AI: Seat = 1;
+/**
+ * In modalità "ai" l'unico posto umano è sempre il seat 0: nel 2v2 tutti gli
+ * altri tre — compreso il compagno al seat 2 — sono AI. Ognuno riceve
+ * **solo** il proprio InfoSet (AGENTS.md §3.3): il compagno-AI non vede la
+ * mano dell'umano più di quanto la veda un avversario.
+ */
+const SEAT_UMANO_IN_MODALITA_AI: Seat = 0;
 
 interface PresaMostrata {
   readonly banco: readonly Giocata[];
@@ -53,7 +66,9 @@ export interface Partita {
   readonly pensando: boolean;
   /** Punti per posto, indicizzati come `stato.mani`. Due voci nell'1v1, quattro nel 2v2. */
   readonly punti: readonly number[];
-  readonly vincitore: Seat | null;
+  /** Punti di squadra: coincide con `punti` nell'1v1, li somma a coppie nel 2v2. */
+  readonly puntiSquadra: readonly [number, number];
+  readonly vincitore: Squadra | null;
   gioca(carta: Carta): void;
   ricomincia(): void;
 }
@@ -61,7 +76,7 @@ export interface Partita {
 export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Partita {
   const [seed, setSeed] = useState(config.seed);
   const [stato, setStato] = useState<GameState>(
-    () => statoIniziale ?? nuovaPartita({ variante: "1v1", seed: config.seed }),
+    () => statoIniziale ?? nuovaPartita({ variante: config.variante, seed: config.seed }),
   );
   const [presa, setPresa] = useState<PresaMostrata | null>(null);
   const [spazzata, setSpazzata] = useState(false);
@@ -120,7 +135,8 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
    * Worker dedicato (`ai/client.ts` + `ai/worker.ts`). Il worker si crea solo
    * quando serve — non ha senso spendere il costo per Facile e Medio, che
    * restano sincroni — e si smonta quando si cambia livello o si esce dal
-   * tavolo, così non resta a girare a vuoto.
+   * tavolo, così non resta a girare a vuoto. Un solo worker basta anche nel
+   * 2v2: i tre posti AI giocano in sequenza, mai in contemporanea.
    */
   const clientRef = useRef<ClientAI | null>(null);
   useEffect(() => {
@@ -133,16 +149,19 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
     };
   }, [config.modalita, config.livello]);
 
-  const turnoDellAI = config.modalita === "ai" && stato.turno === SEAT_AI;
+  const seatUmano = config.modalita === "ai" ? SEAT_UMANO_IN_MODALITA_AI : stato.turno;
+  const turnoDellAI = config.modalita === "ai" && stato.turno !== SEAT_UMANO_IN_MODALITA_AI;
   const inAttesa = presa !== null;
 
-  // Il turno dell'AI, con una pausa perché si veda cosa succede.
+  // Il turno dell'AI (qualunque posto, nel 2v2 anche il compagno), con una
+  // pausa perché si veda cosa succede.
   useEffect(() => {
     if (!turnoDellAI || inAttesa || stato.fase === "fine") return;
+    const seatAI = stato.turno;
 
     if (config.livello === "esperto") {
       let annullato = false;
-      const infoset = infoSetPer(stato, SEAT_AI);
+      const infoset = infoSetPer(stato, seatAI);
       const seedMossa = Math.floor(rng.current() * 0xffffffff);
 
       const timer = setTimeout(() => {
@@ -151,14 +170,14 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
         client
           .chiediMossa(infoset, seedMossa)
           .then((carta) => {
-            if (!annullato) esegui(stato, SEAT_AI, carta);
+            if (!annullato) esegui(stato, seatAI, carta);
           })
           .catch(() => {
             // Difesa: se il worker fallisce (bug, browser che lo nega), la
             // partita non deve incastrarsi — si ripiega sull'euristica media.
             if (annullato) return;
             const carta = scegliCarta(infoset, "medio", rng.current);
-            if (carta) esegui(stato, SEAT_AI, carta);
+            if (carta) esegui(stato, seatAI, carta);
           });
       }, PAUSA_AI_MS);
 
@@ -169,13 +188,13 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
     }
 
     const timer = setTimeout(() => {
-      const carta = scegliCarta(infoSetPer(stato, SEAT_AI), config.livello, rng.current);
-      if (carta) esegui(stato, SEAT_AI, carta);
+      const carta = scegliCarta(infoSetPer(stato, seatAI), config.livello, rng.current);
+      if (carta) esegui(stato, seatAI, carta);
     }, PAUSA_AI_MS);
     return () => clearTimeout(timer);
   }, [turnoDellAI, inAttesa, stato, config.livello, esegui]);
 
-  const umanoDiTurno = config.modalita === "locale" || stato.turno !== SEAT_AI;
+  const umanoDiTurno = config.modalita === "locale" || stato.turno === SEAT_UMANO_IN_MODALITA_AI;
   const puoGiocare = !inAttesa && stato.fase !== "fine" && umanoDiTurno;
 
   const gioca = useCallback(
@@ -192,8 +211,10 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
     rng.current = creaRng(nuovoSeed ^ 0x9e3779b9);
     setPresa(null);
     setSpazzata(false);
-    setStato(nuovaPartita({ variante: "1v1", seed: nuovoSeed }));
-  }, [seed]);
+    setStato(nuovaPartita({ variante: config.variante, seed: nuovoSeed }));
+  }, [seed, config.variante]);
+
+  const { punti: puntiSquadra, vincitore } = esito(stato);
 
   return {
     stato,
@@ -202,11 +223,11 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
     spazzata,
     puoGiocare,
     // In locale il "mio" posto è sempre quello di turno: ci si passa il device.
-    seatUmano: config.modalita === "locale" ? stato.turno : 0,
+    seatUmano,
     pensando: turnoDellAI && !inAttesa && stato.fase !== "fine",
     punti: stato.mani.map((_, seat) => puntiSeat(stato, seat as Seat)),
-    // Nell'1v1 la squadra coincide col posto, quindi `Squadra` è già un `Seat` valido.
-    vincitore: stato.fase === "fine" ? esito(stato).vincitore : null,
+    puntiSquadra,
+    vincitore: stato.fase === "fine" ? vincitore : null,
     gioca,
     ricomincia,
   };

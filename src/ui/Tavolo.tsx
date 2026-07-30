@@ -9,7 +9,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.tsx";
 import { PUNTI } from "@/core/deck.ts";
-import type { Seat } from "@/core/types.ts";
+import { numeroGiocatori } from "@/core/machine.ts";
+import { squadraDi } from "@/core/rules.ts";
+import type { Carta, Seat, Squadra } from "@/core/types.ts";
 import type { Modalita, Partita } from "@/game/usePartita.ts";
 import { cn } from "@/lib/utils.ts";
 import { CartaImg, nomeCarta } from "@/ui/Carta.tsx";
@@ -26,9 +28,68 @@ interface Props {
   readonly onEsci: () => void;
 }
 
-function nomeSeat(seat: Seat, modalita: Modalita, seatUmano: Seat): string {
+/**
+ * Dove sta, sullo schermo, chi siede in `seat` — visto da chi siede in
+ * `base`. In due (1v1) esistono solo "basso" (chi guarda) e "alto" (l'unico
+ * altro posto). In quattro (2v2, F7) il giro orario
+ * base→destra→alto→sinistra rispecchia come ci si siede davvero attorno a un
+ * tavolo da coppie: il compagno è sempre di fronte (alto), i due avversari
+ * ai lati — coerente con `squadraDi` (0+2 contro 1+3).
+ */
+type Posizione = "basso" | "destra" | "alto" | "sinistra";
+
+function posizioneDi(seat: Seat, base: Seat, giocatori: number): Posizione {
+  const offset = (((seat - base) % giocatori) + giocatori) % giocatori;
+  if (giocatori <= 2) return offset === 0 ? "basso" : "alto";
+  return (["basso", "destra", "alto", "sinistra"] as const)[offset] ?? "basso";
+}
+
+const ANIMAZIONE_INGRESSO: Record<Posizione, string> = {
+  basso: "gioca-dal-basso",
+  destra: "gioca-da-destra",
+  alto: "gioca-dallalto",
+  sinistra: "gioca-da-sinistra",
+};
+
+const ANIMAZIONE_VOLO: Record<Posizione, string> = {
+  basso: "vola-giu",
+  destra: "vola-a-destra",
+  alto: "vola-su",
+  sinistra: "vola-a-sinistra",
+};
+
+/**
+ * Tutti i posti di una variante, raggruppati per squadra. Nell'1v1 ogni
+ * squadra ha un solo posto: è la stessa formula del 2v2, non serve un caso a
+ * parte — riusa `squadraDi` del core invece di reinventare chi è compagno di
+ * chi (AGENTS.md §3.2).
+ */
+function squadreDi(giocatori: number): readonly (readonly Seat[])[] {
+  const squadre: Seat[][] = [[], []];
+  for (let seat = 0; seat < giocatori; seat++) {
+    squadre[squadraDi(seat as Seat)]?.push(seat as Seat);
+  }
+  return squadre;
+}
+
+function nomeSeat(seat: Seat, modalita: Modalita, seatUmano: Seat, giocatori: number): string {
   if (modalita === "locale") return `Giocatore ${seat + 1}`;
-  return seat === seatUmano ? "Tu" : "Avversario";
+  if (seat === seatUmano) return "Tu";
+  if (giocatori <= 2) return "Avversario";
+  if (squadraDi(seat) === squadraDi(seatUmano)) return "Compagno";
+  const avversari = Array.from({ length: giocatori }, (_, s) => s as Seat).filter(
+    (s) => squadraDi(s) !== squadraDi(seatUmano),
+  );
+  return `Avversario ${avversari.indexOf(seat) + 1}`;
+}
+
+function nomeSquadra(
+  squadra: readonly Seat[],
+  modalita: Modalita,
+  seatUmano: Seat,
+  giocatori: number,
+): string {
+  return squadra.map((seat) => nomeSeat(seat, modalita, seatUmano, giocatori)).join(" e ");
 }
 
 export function Tavolo({ partita, modalita, onEsci }: Props) {
@@ -41,15 +102,17 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
     seatUmano,
     pensando,
     punti,
+    puntiSquadra,
   } = partita;
+  const giocatori = numeroGiocatori(stato.variante);
   const [abbandonaAperto, setAbbandonaAperto] = useState(false);
 
   /**
-   * Hot-seat ("in due", stesso device): a ogni cambio di turno lo schermo va
-   * coperto finché il telefono non è passato al giocatore giusto — mai
-   * contro l'AI, dove non c'è nessuna mano da nascondere all'avversario.
-   * La logica di quando scattare vive in `privacyHotSeat.ts`, pura e
-   * testata: qui si limita a inseguire i cambi di `stato.turno`.
+   * Hot-seat: a ogni cambio di turno lo schermo va coperto finché il
+   * telefono non è passato al giocatore giusto — mai contro l'AI, dove non
+   * c'è nessuna mano da nascondere a nessuno. Generalizzato a N giocatori
+   * (F7, 0.9.0): `privacyHotSeat.ts` non ha mai enumerato solo due posti —
+   * gira identico nel 2v2 "in quattro", vedi i test dedicati.
    */
   const [privacy, setPrivacy] = useState(() => statoPrivacyIniziale(seatUmano));
   useEffect(() => {
@@ -64,9 +127,18 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
   // giocatore già confermato: il turno nel `core` è già passato all'altro,
   // ma la sua mano non deve comparire finché non ha lui in mano il telefono.
   const seatVisibile = overlayAttivo ? privacy.seatConfermato : seatUmano;
-  const seatAvversario = (seatVisibile === 0 ? 1 : 0) as Seat;
+
+  // Nel 2v2 il giro orario è basso(tu)→destra→alto(compagno)→sinistra. Le
+  // formule restano valide anche nell'1v1 (dove destra/sinistra non si
+  // renderizzano mai): non serve un ramo separato.
+  const seatAlto = ((seatVisibile + (giocatori <= 2 ? 1 : 2)) % giocatori) as Seat;
+  const seatDestra = ((seatVisibile + 1) % giocatori) as Seat;
+  const seatSinistra = ((seatVisibile + 3) % giocatori) as Seat;
+
   const manoMia = stato.mani[seatVisibile] ?? [];
-  const manoAvversario = stato.mani[seatAvversario] ?? [];
+  const manoAlto = stato.mani[seatAlto] ?? [];
+  const manoDestra = stato.mani[seatDestra] ?? [];
+  const manoSinistra = stato.mani[seatSinistra] ?? [];
   const finita = stato.fase === "fine";
   const puoGiocare = puoGiocareStato && !overlayAttivo;
 
@@ -94,6 +166,12 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
     return () => window.removeEventListener("keydown", onTasto);
   }, [puoGiocare, manoMia, partita]);
 
+  // La direzione unica in cui vola l'intera presa: dipende solo da dove
+  // siede il vincitore rispetto a chi guarda, non dalla singola carta.
+  const direzioneVolo = presa
+    ? ANIMAZIONE_VOLO[posizioneDi(presa.vincitore, seatVisibile, giocatori)]
+    : undefined;
+
   return (
     <>
       {/* `inert` mentre lo schermo privacy è su: il contenuto sotto non deve
@@ -102,7 +180,7 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
         inert={overlayAttivo || undefined}
         className="table-felt flex h-dvh flex-col justify-between overflow-hidden px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6"
       >
-        {/* Avversario */}
+        {/* Alto: il compagno nel 2v2, l'unico avversario nell'1v1 */}
         <section className="flex flex-col items-center gap-2">
           <div className="flex w-full max-w-2xl items-center justify-between text-xs">
             <button
@@ -113,15 +191,28 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
             >
               Abbandona
             </button>
+            {giocatori > 2 && (
+              <span className="text-on-felt-muted">
+                Voi{" "}
+                <strong className="text-on-felt tabular-nums">
+                  {puntiSquadra[squadraDi(seatVisibile)]}
+                </strong>
+                {" · Loro "}
+                <strong className="text-on-felt tabular-nums">
+                  {puntiSquadra[(squadraDi(seatVisibile) === 0 ? 1 : 0) as Squadra]}
+                </strong>
+              </span>
+            )}
             <span className="text-on-felt-muted">
-              {nomeSeat(seatAvversario, modalita, seatUmano)}{" "}
-              <strong className="ml-1 text-on-felt tabular-nums">
-                {punti[seatAvversario] ?? 0}
-              </strong>
+              {nomeSeat(seatAlto, modalita, seatVisibile, giocatori)}{" "}
+              <strong className="ml-1 text-on-felt tabular-nums">{punti[seatAlto] ?? 0}</strong>
             </span>
           </div>
-          <ul className="flex gap-1.5" aria-label="Carte dell'avversario">
-            {manoAvversario.map((_, i) => (
+          <ul
+            className="flex gap-1.5"
+            aria-label={`Carte di ${nomeSeat(seatAlto, modalita, seatVisibile, giocatori)}`}
+          >
+            {manoAlto.map((_, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: sono dorsi indistinguibili, l'indice è l'unica identità che abbiano — e usare la carta come chiave la rivelerebbe nel DOM
               <li key={i} className="w-12 sm:w-16">
                 <CartaImg coperta />
@@ -130,16 +221,27 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
           </ul>
         </section>
 
-        {/* Tavolo */}
-        <section className="relative flex flex-1 items-center justify-center py-3">
-          <div className="flex min-h-[7rem] items-center gap-3 sm:min-h-[9rem] sm:gap-4">
+        {/* Tavolo: banco al centro, compagno di lato nel 2v2 */}
+        <section className="relative flex flex-1 items-center gap-1 py-3">
+          {giocatori > 2 && (
+            <ManoLaterale
+              seat={seatSinistra}
+              mano={manoSinistra}
+              punti={punti[seatSinistra] ?? 0}
+              modalita={modalita}
+              seatVisibile={seatVisibile}
+              giocatori={giocatori}
+            />
+          )}
+
+          <div className="flex min-h-[7rem] flex-1 items-center justify-center gap-2 sm:min-h-[9rem] sm:gap-4">
             {bancoVisibile.length === 0 ? (
               <p className="text-on-felt-muted/60 text-sm">
                 {finita ? "Partita finita" : "Tavolo vuoto"}
               </p>
             ) : (
               bancoVisibile.map((giocata, indice) => {
-                const miaGiocata = giocata.seat === seatVisibile;
+                const posizione = posizioneDi(giocata.seat, seatVisibile, giocatori);
                 return (
                   <div
                     key={`${giocata.seat}-${giocata.carta.seme}-${giocata.carta.rango}`}
@@ -147,16 +249,17 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
                     className={cn(
                       // Entra dal lato di chi l'ha calata, con un arco invece
                       // che una traslazione dritta.
-                      miaGiocata ? "gioca-dal-basso" : "gioca-dallalto",
+                      ANIMAZIONE_INGRESSO[posizione],
                       // E quando il giro si chiude, vola verso chi ha vinto —
                       // rimpiazza del tutto l'animazione d'ingresso qui sopra.
-                      spazzata && (presa?.vincitore === seatVisibile ? "vola-giu" : "vola-su"),
+                      spazzata && direzioneVolo,
                     )}
                   >
                     <CartaImg
                       carta={giocata.carta}
                       className={cn(
-                        "w-20 transition-all duration-200 sm:w-24",
+                        "transition-all duration-200",
+                        giocatori > 2 ? "w-14 sm:w-20" : "w-20 sm:w-24",
                         presa &&
                           !spazzata &&
                           presa.vincitore === giocata.seat &&
@@ -169,8 +272,25 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
             )}
           </div>
 
-          {/* Mazzo e briscola */}
-          <aside className="absolute top-1/2 right-0 -translate-y-1/2 flex flex-col items-center gap-1">
+          {giocatori > 2 && (
+            <ManoLaterale
+              seat={seatDestra}
+              mano={manoDestra}
+              punti={punti[seatDestra] ?? 0}
+              modalita={modalita}
+              seatVisibile={seatVisibile}
+              giocatori={giocatori}
+            />
+          )}
+
+          {/* Mazzo e briscola: in un angolo nel 2v2, per non litigare con le
+              mani laterali che occupano i bordi verticali. */}
+          <aside
+            className={cn(
+              "absolute flex flex-col items-center gap-1",
+              giocatori > 2 ? "top-0 right-0" : "top-1/2 right-0 -translate-y-1/2",
+            )}
+          >
             {stato.mazzo.length > 0 ? (
               <>
                 <div className="relative h-16 w-16 sm:h-20 sm:w-20">
@@ -202,12 +322,12 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
         <section className="flex flex-col items-center gap-2">
           <p aria-live="polite" className="h-5 text-on-felt-muted text-xs">
             {presa
-              ? `Presa di ${nomeSeat(presa.vincitore, modalita, seatVisibile)}${presa.punti > 0 ? ` · ${presa.punti} punti` : ""}`
+              ? `Presa di ${nomeSeat(presa.vincitore, modalita, seatVisibile, giocatori)}${presa.punti > 0 ? ` · ${presa.punti} punti` : ""}`
               : pensando
                 ? "Sta pensando…"
                 : puoGiocare
                   ? modalita === "locale"
-                    ? `Tocca a ${nomeSeat(stato.turno, modalita, seatVisibile)}`
+                    ? `Tocca a ${nomeSeat(stato.turno, modalita, seatVisibile, giocatori)}`
                     : "Tocca a te"
                   : ""}
           </p>
@@ -245,7 +365,7 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
           </ul>
 
           <p className="text-xs text-on-felt-muted">
-            {nomeSeat(seatVisibile, modalita, seatVisibile)}{" "}
+            {nomeSeat(seatVisibile, modalita, seatVisibile, giocatori)}{" "}
             <strong className="ml-1 text-on-felt tabular-nums">{punti[seatVisibile] ?? 0}</strong>
           </p>
         </section>
@@ -255,7 +375,7 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
 
       {overlayAttivo && privacy.seatInAttesa !== null && (
         <SchermoPrivacy
-          nomeGiocatore={nomeSeat(privacy.seatInAttesa, modalita, seatUmano)}
+          nomeGiocatore={nomeSeat(privacy.seatInAttesa, modalita, seatUmano, giocatori)}
           onSblocca={() => setPrivacy((precedente) => confermaSblocco(precedente))}
         />
       )}
@@ -282,18 +402,53 @@ export function Tavolo({ partita, modalita, onEsci }: Props) {
   );
 }
 
+/** Una mano vista di lato: solo nel 2v2, dorsi impilati in verticale per stare nei bordi stretti. */
+function ManoLaterale({
+  seat,
+  mano,
+  punti,
+  modalita,
+  seatVisibile,
+  giocatori,
+}: {
+  readonly seat: Seat;
+  readonly mano: readonly Carta[];
+  readonly punti: number;
+  readonly modalita: Modalita;
+  readonly seatVisibile: Seat;
+  readonly giocatori: number;
+}) {
+  const nome = nomeSeat(seat, modalita, seatVisibile, giocatori);
+  return (
+    <aside className="flex shrink-0 flex-col items-center gap-1" aria-label={`Carte di ${nome}`}>
+      <span className="max-w-14 text-[10px] text-on-felt-muted leading-tight">{nome}</span>
+      <div className="flex flex-col items-center -space-y-9 sm:-space-y-11">
+        {mano.map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: sono dorsi indistinguibili, l'indice è l'unica identità che abbiano
+          <div key={i} className="w-9 sm:w-11">
+            <CartaImg coperta />
+          </div>
+        ))}
+      </div>
+      <span className="text-[10px] text-on-felt-muted tabular-nums">{punti}</span>
+    </aside>
+  );
+}
+
 function FinePartita({ partita, modalita, onEsci }: Props) {
-  const { stato, punti, vincitore } = partita;
+  const { stato, puntiSquadra, vincitore } = partita;
   const finita = stato.fase === "fine";
   const pareggio = vincitore === null;
+  const giocatori = numeroGiocatori(stato.variante);
+  const squadre = squadreDi(giocatori);
 
   let titolo: string;
   if (vincitore === null) {
     titolo = "Sessanta pari";
   } else if (modalita === "locale") {
-    titolo = `Vince ${nomeSeat(vincitore, modalita, partita.seatUmano)}`;
+    titolo = `Vince ${nomeSquadra(squadre[vincitore] ?? [], modalita, partita.seatUmano, giocatori)}`;
   } else {
-    titolo = vincitore === partita.seatUmano ? "Hai vinto" : "Hai perso";
+    titolo = vincitore === squadraDi(partita.seatUmano) ? "Hai vinto" : "Hai perso";
   }
 
   return (
@@ -309,18 +464,18 @@ function FinePartita({ partita, modalita, onEsci }: Props) {
         </DialogHeader>
 
         <div className="flex items-center justify-center gap-6 py-3">
-          {([0, 1] as const).map((seat) => (
-            <div key={seat} className="text-center">
+          {squadre.map((squadra, indice) => (
+            <div key={squadra.join("-")} className="text-center">
               <p className="text-muted-foreground text-xs">
-                {nomeSeat(seat, modalita, partita.seatUmano)}
+                {nomeSquadra(squadra, modalita, partita.seatUmano, giocatori)}
               </p>
               <p
                 className={cn(
                   "font-semibold text-3xl tabular-nums",
-                  vincitore === seat && "text-primary",
+                  vincitore === indice && "text-primary",
                 )}
               >
-                {punti[seat] ?? 0}
+                {puntiSquadra[indice as Squadra] ?? 0}
               </p>
             </div>
           ))}

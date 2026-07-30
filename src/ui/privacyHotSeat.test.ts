@@ -83,3 +83,57 @@ describe("confermaSblocco", () => {
     expect(stato).toEqual({ seatConfermato: 0, seatInAttesa: null });
   });
 });
+
+/**
+ * 🃏 F7 (0.9.0): il 2v2 "in quattro" riusa esattamente questa logica, senza
+ * una riga di codice in più — `Seat` è già 0|1|2|3 e nessuna funzione qui
+ * sopra ha mai enumerato "l'altro giocatore" a mano. Questi test non
+ * cambiano il modulo: dimostrano che gira identico a 4 posti.
+ */
+describe("hot-seat a quattro giocatori (2v2, F7)", () => {
+  it("il giro completo 0→1→2→3→0 mette in attesa ciascuno a turno", () => {
+    let stato = statoPrivacyIniziale(0);
+    for (const prossimo of [1, 2, 3, 0] as const) {
+      const inAttesa = prossimoStatoPrivacy(stato, prossimo, false, true);
+      expect(inAttesa.seatInAttesa).toBe(prossimo === stato.seatConfermato ? null : prossimo);
+      stato = confermaSblocco(inAttesa);
+      expect(stato.seatConfermato).toBe(prossimo);
+      expect(stato.seatInAttesa).toBeNull();
+    }
+    // Un giro completo torna al primo giocatore.
+    expect(stato).toEqual({ seatConfermato: 0, seatInAttesa: null });
+  });
+
+  it("il compagno (seat 2, di fronte nel giro) va in attesa come chiunque altro", () => {
+    const iniziale = statoPrivacyIniziale(0);
+    const dopo = prossimoStatoPrivacy(iniziale, 2, false, true);
+    expect(dopo).toEqual({ seatConfermato: 0, seatInAttesa: 2 });
+  });
+
+  it("non scatta mentre la presa vola, anche a metà di un giro a 4", () => {
+    const dopoSeat1 = confermaSblocco(
+      prossimoStatoPrivacy(statoPrivacyIniziale(0), 1, false, true),
+    );
+    // Il seat 1 chiude un giro e la presa resta ferma/vola: turno già a 3.
+    const durantePresa = prossimoStatoPrivacy(dopoSeat1, 3, true, true);
+    expect(durantePresa).toBe(dopoSeat1);
+    const dopoPresa = prossimoStatoPrivacy(durantePresa, 3, false, true);
+    expect(dopoPresa).toEqual({ seatConfermato: 1, seatInAttesa: 3 });
+  });
+
+  it("resta idempotente anche a 4 posti, per qualunque seat in attesa", () => {
+    for (const seat of [1, 2, 3] as const) {
+      const iniziale = statoPrivacyIniziale(0);
+      const primo = prossimoStatoPrivacy(iniziale, seat, false, true);
+      const secondo = prossimoStatoPrivacy(primo, seat, false, true);
+      expect(secondo).toBe(primo);
+    }
+  });
+
+  it("pulisce l'attesa se il turno torna al confermato prima della conferma, anche saltando posti", () => {
+    const iniziale = statoPrivacyIniziale(2);
+    const inAttesa = prossimoStatoPrivacy(iniziale, 3, false, true);
+    const tornato = prossimoStatoPrivacy(inAttesa, 2, false, true);
+    expect(tornato).toEqual({ seatConfermato: 2, seatInAttesa: null });
+  });
+});

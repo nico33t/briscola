@@ -193,6 +193,45 @@
     animation: gioca-dallalto 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* ── Le stesse due, ruotate di 90°: il 2v2 (F7, 0.9.0) ha anche un
+     compagno e due avversari ai lati. Stessa idea — arco con overshoot,
+     rotazione specchiata fra sinistra e destra — solo lungo l'asse
+     orizzontale invece che verticale. */
+  @keyframes gioca-da-sinistra {
+    0% {
+      transform: translate(-130%, 4%) rotate(-10deg) scale(0.82);
+      opacity: 0;
+    }
+    62% {
+      transform: translate(6%, -2%) rotate(4deg) scale(1.05);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes gioca-da-destra {
+    0% {
+      transform: translate(130%, -4%) rotate(10deg) scale(0.82);
+      opacity: 0;
+    }
+    62% {
+      transform: translate(-6%, 2%) rotate(-4deg) scale(1.05);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+  }
+  .gioca-da-sinistra {
+    animation: gioca-da-sinistra 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .gioca-da-destra {
+    animation: gioca-da-destra 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
   /* ── La carta arriva dal mazzo ─────────────────────────────────
      Sia la distribuzione iniziale sia ogni pescata durante il giro usano lo
      stesso ingresso: la carta arriva da dove sta il mazzo (in alto a
@@ -257,6 +296,43 @@
   }
   .vola-su {
     animation: vola-verso-l-alto 420ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
+  }
+
+  /* Stesso volo, verso i due lati: nel 2v2 (F7) un avversario può sedere a
+     sinistra o a destra di chi guarda, non solo di fronte o sotto. */
+  @keyframes vola-verso-sinistra {
+    0% {
+      transform: translateX(0) scale(1) rotate(0deg);
+      opacity: 1;
+    }
+    20% {
+      transform: translateX(4%) scale(1.1) rotate(4deg);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(-60vw) scale(0.55) rotate(-10deg);
+      opacity: 0;
+    }
+  }
+  @keyframes vola-verso-destra {
+    0% {
+      transform: translateX(0) scale(1) rotate(0deg);
+      opacity: 1;
+    }
+    20% {
+      transform: translateX(-4%) scale(1.1) rotate(-4deg);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(60vw) scale(0.55) rotate(10deg);
+      opacity: 0;
+    }
+  }
+  .vola-a-sinistra {
+    animation: vola-verso-sinistra 420ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
+  }
+  .vola-a-destra {
+    animation: vola-verso-destra 420ms cubic-bezier(0.45, 0, 0.7, 1) forwards;
   }
 
   /* Il respiro della carta di turno: appena percettibile, serve solo a dire

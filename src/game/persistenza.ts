@@ -1,4 +1,5 @@
 import { RANGHI, SEMI } from "@/core/deck.ts";
+import { numeroGiocatori } from "@/core/machine.ts";
 import type { Carta, GameState, Giocata, Seat } from "@/core/types.ts";
 import type { ConfigPartita } from "@/game/usePartita.ts";
 
@@ -67,7 +68,10 @@ export function validaSalvataggio(valore: unknown): PartitaSalvata | null {
   const livello = c.livello;
   const seed = c.seed;
   if (modalita !== "ai" && modalita !== "locale") return null;
-  if (livello !== "facile" && livello !== "medio") return null;
+  // "esperto" mancava qui: un salvataggio col livello Esperto veniva scartato
+  // silenziosamente al primo refresh. Bug pre-2v2, corretto qui perché il 2v2
+  // deve poterlo salvare esattamente come l'1v1 (vedi implements.md §12).
+  if (livello !== "facile" && livello !== "medio" && livello !== "esperto") return null;
   if (typeof seed !== "number" || !Number.isFinite(seed)) return null;
 
   const variante = s.variante;
@@ -82,12 +86,28 @@ export function validaSalvataggio(valore: unknown): PartitaSalvata | null {
   if (!semeBriscola) return null;
   if (!eSeat(turno) || !eSeat(diMano)) return null;
 
+  // `config.variante` è arrivato con il 2v2 (F7, 0.9.0): i salvataggi
+  // precedenti non ce l'hanno. Migrazione difensiva, non una bump di chiave —
+  // manca? si usa la variante dello stato, che per un salvataggio pre-2v2 è
+  // sempre stata "1v1". Se c'è mai deve però combaciare con lo stato: un
+  // salvataggio con `config.variante` diverso da `stato.variante` è
+  // incoerente (manomesso o corrotto), non un salvataggio vecchio.
+  const varianteConfig = c.variante;
+  if (varianteConfig !== undefined && varianteConfig !== "1v1" && varianteConfig !== "2v2") {
+    return null;
+  }
+  if (varianteConfig !== undefined && varianteConfig !== variante) return null;
+
   const { cartaBriscola, mazzo, mani, prese, banco } = s;
   if (!eCarta(cartaBriscola)) return null;
   if (!eMazzoDiCarte(mazzo)) return null;
   if (!eArrayDiMani(mani)) return null;
   if (!eArrayDiMani(prese)) return null;
   if (!Array.isArray(banco)) return null;
+  // Il numero di posti deve combaciare con la variante: un 2v2 con due sole
+  // mani (o viceversa) è uno stato che il core non produce mai da solo.
+  const giocatoriAttesi = numeroGiocatori(variante);
+  if (mani.length !== giocatoriAttesi || prese.length !== giocatoriAttesi) return null;
 
   const giocate: Giocata[] = [];
   for (const giocata of banco) {
@@ -104,7 +124,7 @@ export function validaSalvataggio(valore: unknown): PartitaSalvata | null {
   if (new Set(tutte.map((x) => `${x.seme}-${x.rango}`)).size !== 40) return null;
 
   return {
-    config: { modalita, livello, seed },
+    config: { variante, modalita, livello, seed },
     stato: {
       variante,
       fase,

@@ -3,8 +3,11 @@ import { nuovaPartita } from "@/core/machine.ts";
 import { validaSalvataggio } from "@/game/persistenza.ts";
 import type { ConfigPartita } from "@/game/usePartita.ts";
 
-const config: ConfigPartita = { modalita: "ai", livello: "medio", seed: 7 };
+const config: ConfigPartita = { variante: "1v1", modalita: "ai", livello: "medio", seed: 7 };
 const buono = () => ({ config, stato: nuovaPartita({ variante: "1v1", seed: 7 }) });
+
+const config2v2: ConfigPartita = { variante: "2v2", modalita: "ai", livello: "esperto", seed: 3 };
+const buono2v2 = () => ({ config: config2v2, stato: nuovaPartita({ variante: "2v2", seed: 3 }) });
 
 /** Serializza e rideserializza, come farebbe localStorage. */
 const viaJson = (valore: unknown) => JSON.parse(JSON.stringify(valore));
@@ -28,6 +31,31 @@ describe("validaSalvataggio — accetta ciò che è sano", () => {
       },
     };
     expect(validaSalvataggio(viaJson(conBanco))).not.toBeNull();
+  });
+
+  it("🃏 accetta una partita 2v2 (F7)", () => {
+    const salvato = validaSalvataggio(viaJson(buono2v2()));
+    expect(salvato).not.toBeNull();
+    expect(salvato?.stato.variante).toBe("2v2");
+    expect(salvato?.stato.mani).toHaveLength(4);
+    expect(salvato?.config.variante).toBe("2v2");
+  });
+
+  it("🃏 accetta il livello esperto — era escluso per errore prima del 2v2", () => {
+    const s = buono();
+    const conEsperto = { ...s, config: { ...config, livello: "esperto" } };
+    const salvato = validaSalvataggio(viaJson(conEsperto));
+    expect(salvato).not.toBeNull();
+    expect(salvato?.config.livello).toBe("esperto");
+  });
+
+  it("🔁 migrazione: un salvataggio senza config.variante (pre-2v2) resta valido, defaulta a 1v1", () => {
+    const s = viaJson(buono());
+    // Simula un salvataggio scritto prima che F7 introducesse config.variante.
+    delete s.config.variante;
+    const salvato = validaSalvataggio(s);
+    expect(salvato).not.toBeNull();
+    expect(salvato?.config.variante).toBe("1v1");
   });
 });
 
@@ -90,6 +118,24 @@ describe("🔒 validaSalvataggio — rifiuta ciò che non torna", () => {
   it("rifiuta le mani se non sono array di carte", () => {
     const s = viaJson(buono());
     s.stato.mani = ["denari-asso"];
+    expect(validaSalvataggio(s)).toBeNull();
+  });
+
+  it("🃏 rifiuta una variante che non esiste in config o in stato", () => {
+    const s = viaJson(buono());
+    expect(validaSalvataggio({ ...s, config: { ...s.config, variante: "3v3" } })).toBeNull();
+    expect(validaSalvataggio({ ...s, stato: { ...s.stato, variante: "3v3" } })).toBeNull();
+  });
+
+  it("🃏 rifiuta un config.variante che non combacia con stato.variante — salvataggio incoerente", () => {
+    const s = viaJson(buono2v2());
+    expect(validaSalvataggio({ ...s, config: { ...s.config, variante: "1v1" } })).toBeNull();
+  });
+
+  it("🃏 rifiuta un 2v2 con solo due mani — il core non produce mai questo stato da solo", () => {
+    const s = viaJson(buono2v2());
+    s.stato.mani = [s.stato.mani[0], s.stato.mani[1]];
+    s.stato.prese = [s.stato.prese[0], s.stato.prese[1]];
     expect(validaSalvataggio(s)).toBeNull();
   });
 });
