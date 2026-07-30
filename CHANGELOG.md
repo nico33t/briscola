@@ -8,14 +8,35 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** ci si gioca, è **online sul proprio device** (PWA) e ora anche **online con
-> un amico** via P2P WebRTC (F6): un codice QR o una stringa da incollare bastano a far incontrare
-> due telefoni senza server. Contro il computer c'è un livello che pensa sul serio, si può
-> abbandonare una partita in corso, e in due (o in quattro) sullo stesso device si passa il
-> telefono senza sbirciare le carte degli altri. La variante 2v2 è giocabile in locale, sia contro
-> l'AI sia in hot-seat — il 2v2 via P2P (topologia a stella) resta il prossimo passo (F7 rimanente).
-> Ogni partita finisce nelle statistiche, con replay passo-passo per le ultime 20 (solo le partite
-> locali/vs AI: l'online non è ancora tracciato, vedi 0.11.0), e le regole sono spiegate a schermo.
+> **Prossimi passi possibili** (fase 2): 2v2 via P2P (topologia a stella), scansione QR da
+> fotocamera (oggi si incolla la stringa — `BarcodeDetector` manca su Safari), statistiche e
+> replay anche per le partite online, rivincita online, suoni, suggerimenti dell'ISMCTS in
+> modalità allenamento.
+
+---
+
+## [1.0.0] — 2026-07-30 — Il gioco completo 🎉
+
+**Briscola è finita, nella sua fase 1.** Questa versione non aggiunge codice rispetto alla
+0.11.0: è la dichiarazione che il perimetro promesso dalla roadmap (F0→F7 locale + F6 online)
+è chiuso, verde e in produzione su **https://briscola.pages.dev**.
+
+Cosa c'è dentro, tutto insieme:
+- **Si gioca**: 1v1 e 2v2 a coppie, contro il computer (Facile / Medio / **Esperto** con ISMCTS
+  in un Web Worker — 65,5% di vittorie contro il Medio su 200 partite) o tra umani
+- **Sullo stesso telefono**: hot-seat in due o in quattro, con lo schermo privacy («doppio tocco
+  per sbloccare») che impedisce di sbirciare le carte altrui
+- **Online con un amico**: P2P WebRTC senza alcun server — QR o stringa da incollare, host
+  autoritativo, protocollo validato contro input ostile
+- **Attorno alla partita**: statistiche locali, replay deterministico passo-passo delle ultime
+  20 partite, pagina delle regole, abbandono con conferma, animazioni curate (e spente con
+  `prefers-reduced-motion`)
+- **PWA**: installabile, funziona offline, la partita in corso sopravvive alla chiusura
+- **Privacy totale**: nessun server, nessun account, nessuna telemetria — tutto in localStorage
+- **238 test verdi**, lint e typecheck a zero, bundle 371 KB (116 KB gzip)
+
+Le carte sono le piacentine di [Florixc](https://commons.wikimedia.org/wiki/File:Carte_piacentine_al_completo.jpg),
+pubblico dominio, Wikimedia Commons. Il codice è MIT © 2026 Nicola Tomassini.
 
 ---
 
