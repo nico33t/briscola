@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ClientAI } from "@/ai/client.ts";
+import { creaClientAI } from "@/ai/client.ts";
 import type { Livello } from "@/ai/euristica.ts";
 import { scegliCarta } from "@/ai/euristica.ts";
 import { infoSetPer } from "@/core/infoset.ts";
@@ -112,12 +114,59 @@ export function usePartita(config: ConfigPartita, statoIniziale?: GameState): Pa
     }
   }, [stato, config, seed]);
 
+  /**
+   * Il livello Esperto macina centinaia di simulazioni ISMCTS: farlo sul
+   * thread principale bloccherebbe l'interfaccia, quindi vive in un Web
+   * Worker dedicato (`ai/client.ts` + `ai/worker.ts`). Il worker si crea solo
+   * quando serve — non ha senso spendere il costo per Facile e Medio, che
+   * restano sincroni — e si smonta quando si cambia livello o si esce dal
+   * tavolo, così non resta a girare a vuoto.
+   */
+  const clientRef = useRef<ClientAI | null>(null);
+  useEffect(() => {
+    if (config.modalita !== "ai" || config.livello !== "esperto") return;
+    const client = creaClientAI();
+    clientRef.current = client;
+    return () => {
+      client.termina();
+      clientRef.current = null;
+    };
+  }, [config.modalita, config.livello]);
+
   const turnoDellAI = config.modalita === "ai" && stato.turno === SEAT_AI;
   const inAttesa = presa !== null;
 
   // Il turno dell'AI, con una pausa perché si veda cosa succede.
   useEffect(() => {
     if (!turnoDellAI || inAttesa || stato.fase === "fine") return;
+
+    if (config.livello === "esperto") {
+      let annullato = false;
+      const infoset = infoSetPer(stato, SEAT_AI);
+      const seedMossa = Math.floor(rng.current() * 0xffffffff);
+
+      const timer = setTimeout(() => {
+        const client = clientRef.current;
+        if (!client) return;
+        client
+          .chiediMossa(infoset, seedMossa)
+          .then((carta) => {
+            if (!annullato) esegui(stato, SEAT_AI, carta);
+          })
+          .catch(() => {
+            // Difesa: se il worker fallisce (bug, browser che lo nega), la
+            // partita non deve incastrarsi — si ripiega sull'euristica media.
+            if (annullato) return;
+            const carta = scegliCarta(infoset, "medio", rng.current);
+            if (carta) esegui(stato, SEAT_AI, carta);
+          });
+      }, PAUSA_AI_MS);
+
+      return () => {
+        annullato = true;
+        clearTimeout(timer);
+      };
+    }
 
     const timer = setTimeout(() => {
       const carta = scegliCarta(infoSetPer(stato, SEAT_AI), config.livello, rng.current);

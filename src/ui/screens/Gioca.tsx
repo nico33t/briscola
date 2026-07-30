@@ -70,6 +70,11 @@ const MODALITA: readonly { valore: Modalita; titolo: string; nota: string }[] = 
 const LIVELLI: readonly { valore: Livello; titolo: string; nota: string }[] = [
   { valore: "facile", titolo: "Facile", nota: "Sbaglia spesso, va bene per imparare" },
   { valore: "medio", titolo: "Medio", nota: "Risparmia i carichi, taglia quando conviene" },
+  {
+    valore: "esperto",
+    titolo: "Esperto",
+    nota: "Ricerca Monte Carlo: valuta centinaia di mani possibili prima di scegliere",
+  },
 ];
 
 function Setup({ onGioca }: { readonly onGioca: (config: Configurata) => void }) {
@@ -119,9 +124,12 @@ function Setup({ onGioca }: { readonly onGioca: (config: Configurata) => void })
                 />
               ))}
             </div>
-            <p className="mt-2 text-on-felt-muted/70 text-xs">
-              Il livello Esperto, con ricerca Monte Carlo, arriva prossimamente.
-            </p>
+            {livello === "esperto" && (
+              <p className="mt-2 text-on-felt-muted/70 text-xs">
+                Ci pensa un attimo di più: la ricerca gira in un Web Worker, senza bloccare
+                l'interfaccia.
+              </p>
+            )}
           </fieldset>
         )}
 

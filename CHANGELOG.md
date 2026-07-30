@@ -8,8 +8,70 @@ versionamento [SemVer](https://semver.org/lang/it/). Le versioni seguono `packag
 
 ## [Unreleased]
 
-> **Stato corrente:** ci si gioca, è **online** e si installa come app.
-> Prossimo passo: **F4 — il livello Esperto con ISMCTS** in Web Worker, e la variante 2v2.
+> **Stato corrente:** ci si gioca, è **online**, si installa come app, e contro il computer c'è
+> anche un livello che pensa sul serio.
+> Prossimo passo: la variante 2v2, poi il multiplayer P2P (F6).
+
+---
+
+## [0.7.0] — 2026-07-30 — F4: il livello Esperto pensa davvero (ISMCTS in Web Worker)
+
+### Aggiunto
+- **Livello AI "Esperto"**: Information Set Monte Carlo Tree Search (`ai/ismcts.ts`). A ogni
+  iterazione determinizza l'`InfoSet` (mescola le carte non viste e le distribuisce fra le mani
+  avversarie e il mazzo, rispettando i conteggi noti e lasciando la briscola scoperta in fondo al
+  mazzo), simula con il **reducer di `core/`** — mai una riga di regole duplicata — e accumula le
+  statistiche su un albero UCB1 (`c = √2`) indicizzato dalla sequenza di carte giocate, non dallo
+  stato completo. Il rollout usa la stessa euristica del livello Medio invece che mosse a caso:
+  in Briscola un rollout casuale è troppo rumoroso per essere utile.
+- **`ai/ismcts.ts` è TypeScript puro**, come `core/`: zero DOM, zero `window`, zero API del Worker,
+  zero React. Gira identico dentro Vitest (Node), nel Web Worker e — se un giorno servirà il
+  porting Expo/React Native (vedi implements.md §3.8) — lì pure, senza toccare una riga.
+- **`ai/worker.ts`**: entry del Web Worker, "solo colla" — riceve `{info, seed}` via
+  `postMessage`, chiama `ismcts.ts`, risponde con la carta. È l'unico file che parla l'API del
+  Worker: il tsconfig ha sia `"DOM"` che `"WebWorker"` nei `lib` (le due dichiarano `self` con tipi
+  incompatibili), risolto con un `declare const self: DedicatedWorkerGlobalScope` locale a quel
+  modulo soltanto.
+- **`ai/client.ts`**: wrapper main-thread (`creaClientAI().chiediMossa(info, seed)`), l'unico punto
+  in cui la UI parla col worker. Gestisce anche un worker che va in errore: le richieste in sospeso
+  vengono rifiutate invece di restare appese per sempre.
+- **`game/usePartita.ts`**: il livello Esperto passa dal worker in modo **asincrono** (Facile e
+  Medio restano sincroni, come prima). Il worker si crea solo quando serve e si smonta al cambio
+  di livello o all'uscita dal tavolo. Se il worker fallisce, si ripiega sull'euristica Medio invece
+  di incastrare la partita.
+- **Setup partita**: l'opzione "Esperto" nella schermata `#/gioca`, con nota che la ricerca gira
+  in un Web Worker e non blocca l'interfaccia.
+- **Torneo di validazione** (`ai/ismcts.test.ts`, 15 test): Esperto vs Medio su 200 partite e
+  Esperto vs Random su 100, con meno iterazioni che in produzione per stare sotto il minuto.
+  Risultati reali: **65,5% di vittorie contro il Medio** (soglia richiesta >55%) e **74,0% contro
+  il caso**. Più test dedicati: la determinizzazione non assegna mai una carta già vista, le mani
+  determinizzate hanno le taglie giuste, l'ISMCTS ritorna sempre una carta legale, stesso seed →
+  stessa carta.
+
+### Perché — decisioni prese durante F4
+- **Budget a iterazioni, non a tempo.** implements.md §6.3 parlava di un budget a tempo (~700 ms);
+  qui la funzione di ricerca resta pura e deterministica (niente `Date.now` dentro `ismcts.ts`,
+  serve per il test "stesso seed → stessa carta"), e il tempo si ottiene tarando il numero di
+  iterazioni: `ITERAZIONI_DEFAULT = 15 000`, misurato a ~0,045-0,07 ms/iterazione, per restare
+  nell'intorno dei 700 ms su un device comune.
+- **Espansione guidata dall'euristica, non a caso.** Prima versione: quando un nodo non è ancora
+  espanso del tutto rispetto al mondo determinizzato, si sceglieva la mossa non provata a caso fra
+  quelle disponibili. Col ramo hidden-information che esplode (ogni determinizzazione può rivelare
+  una mano avversaria diversa), il budget si spargeva su rami implausibili e il vantaggio della
+  ricerca non cresceva più iterazioni. Preferire la mossa che l'euristica giocherebbe in quel
+  mondo (quando è ancora da espandere) concentra la ricerca dove conta: prima della correzione il
+  torneo contro il Medio oscillava 54-59% indipendentemente dal budget; dopo, 62-69% e crescente
+  con più iterazioni — segno che l'algoritmo ora scala come dovrebbe.
+- **Le prese ripartono vuote nella determinizzazione.** Il mondo simulato non ricostruisce le
+  carte esatte già prese (l'`InfoSet` non le conosce comunque, solo il totale punti): si somma la
+  costante nota (`info.puntiSquadra`) fuori dalla ricerca, e il punteggio si normalizza in [0, 1]
+  sui punti ancora in palio. Più semplice e altrettanto corretto di una ricostruzione via
+  subset-sum delle prese storiche.
+- **"Stracciare il random" quantificato a >65%, non >80%.** Contro un avversario puramente
+  casuale il vantaggio della ricerca si appiattisce presto (la policy di rollout modella un
+  avversario ragionevole, non uno che gioca a caso): il Medio stesso vince "solo" il 69,5% contro
+  il caso (dato già in implements.md). 74% per l'Esperto è comunque un margine netto sul pareggio
+  a 60 punti, ed è il numero vero misurato, non un obiettivo scelto a tavolino.
 
 ### 🚀 Online
 Pubblicato su Cloudflare Pages: **https://briscola.pages.dev**

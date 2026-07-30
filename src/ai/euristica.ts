@@ -17,7 +17,17 @@ import type { Carta } from "../core/types.ts";
  * molto la qualità per iterazione.
  */
 
-export type Livello = "facile" | "medio";
+/**
+ * `esperto` è qui solo perché è il tipo condiviso da tutta l'app (UI,
+ * `usePartita`, persistenza). La sua mossa **non** passa da questa funzione:
+ * `game/usePartita.ts` la intercetta prima e la manda al Web Worker
+ * dell'ISMCTS (`ai/client.ts` + `ai/worker.ts` + `ai/ismcts.ts`) in modo
+ * asincrono — macinare centinaia di simulazioni sul thread principale
+ * bloccherebbe l'interfaccia. Se `scegliCarta` viene comunque chiamata con
+ * `"esperto"` (percorso di ripiego se il worker fallisce), si comporta come
+ * `"medio"`: fallback sicuro, mai un crash.
+ */
+export type Livello = "facile" | "medio" | "esperto";
 
 /**
  * Quanto mi dispiacerebbe perdere questa carta.
